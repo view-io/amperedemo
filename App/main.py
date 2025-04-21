@@ -1,12 +1,35 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, JSONResponse
 import subprocess
 import json
 import threading
 import time
 import os
 import re
+import asyncio
+from ampere_setup import setup as ampere_setup
+import io
+import sys
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    print(f"Received {request.method} request to {request.url}")
+    response = await call_next(request)
+    return response
+
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # Global variables to store the latest Docker stats and thread status
 ollama_containers = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-hr', 'ollama-marketing']
@@ -27,9 +50,11 @@ DOCKER_SOCKET = '/var/run/docker.sock'
 
 TOTAL_CORES = 192  # Total number of cores in the system
 
+
 def clean_ansi(text):
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
+
 
 def run_docker_stats(container):
     cmd = ['docker', '-H', f'unix://{DOCKER_SOCKET}', 'stats', '--format', '{{json .}}', container, '--no-trunc', '--no-stream']
@@ -53,6 +78,7 @@ def run_docker_stats(container):
         print("Docker CLI not found. Make sure it's installed and in the PATH.")
     except Exception as e:
         print(f"Error running Docker stats for {container}: {str(e)}")
+
 
 @app.get("/v1.0/")
 async def root():
@@ -145,63 +171,39 @@ async def get_all_docker_stats():
     view_total_memory_usage = 0
     view_total_memory_limit = 0
 
-    def parse_memory(mem_str):
-        try:
-            value, unit = mem_str.split()
-            value = float(value)
-            if unit == 'GiB':
-                return int(value * 1024)
-            elif unit == 'MiB':
-                return int(value)
-            else:
-                return int(value)  # Assume MiB if no unit specified
-        except ValueError:
-            return 0  # Return 0 if parsing fails
+    def process_container_stats(container, container_type):
+        nonlocal view_total_cpu_usage, view_total_memory_usage, view_total_memory_limit
+        stats = latest_stats[container]
+        cpu_usage = float(stats.get("CPUPerc", "0%").rstrip('%'))
+        normalized_cpu = normalize_cpu_usage(cpu_usage)
+        mem_usage_str = stats.get("MemUsage", "0 / 0").split('/')
+        memory_usage = parse_memory(mem_usage_str[0].strip())
+        memory_limit = parse_memory(mem_usage_str[1].strip())
+        memory_percentage = float(stats.get("MemPerc", "0%").rstrip('%'))
 
-    def normalize_cpu_usage(cpu_usage):
-        return min((cpu_usage / TOTAL_CORES), 100)
+        if container_type == 'view':
+            view_total_cpu_usage += cpu_usage
+            view_total_memory_usage += memory_usage
+            view_total_memory_limit += memory_limit
+
+        return {
+            "container": stats.get("Name", ""),
+            "cpu_usage": f"{cpu_usage:.2f}%",
+            "normalized_cpu_usage": f"{normalized_cpu:.2f}%",
+            "memory_usage": f"{memory_usage:.2f}MiB / {memory_limit:.2f}MiB",
+            "memory_percentage": f"{memory_percentage:.2f}%",
+            "network_io": stats.get("NetIO", ""),
+            "block_io": stats.get("BlockIO", ""),
+            "pids": stats.get("PIDs", "")
+        }
 
     # Process Ollama containers
     for container in ollama_containers:
-        stats = latest_stats[container]
-        cpu_usage = float(stats.get("CPUPerc", "0%").rstrip('%'))
-        normalized_cpu = normalize_cpu_usage(cpu_usage)
-        mem_usage_str = stats.get("MemUsage", "0 / 0").split('/')
-        memory_usage = parse_memory(mem_usage_str[0].strip())
-        memory_limit = parse_memory(mem_usage_str[1].strip())
-
-        all_stats[container] = {
-            "container": stats.get("Name", ""),
-            "cpu_usage": f"{cpu_usage:.2f}%",
-            "normalized_cpu_usage": f"{normalized_cpu:.2f}%",
-            "memory_usage": f"{memory_usage}MiB / {memory_limit}MiB",
-            "network_io": stats.get("NetIO", ""),
-            "block_io": stats.get("BlockIO", ""),
-            "pids": stats.get("PIDs", "")
-        }
+        all_stats[container] = process_container_stats(container, 'ollama')
 
     # Process View containers
     for container in view_containers:
-        stats = latest_stats[container]
-        cpu_usage = float(stats.get("CPUPerc", "0%").rstrip('%'))
-        normalized_cpu = normalize_cpu_usage(cpu_usage)
-        mem_usage_str = stats.get("MemUsage", "0 / 0").split('/')
-        memory_usage = parse_memory(mem_usage_str[0].strip())
-        memory_limit = parse_memory(mem_usage_str[1].strip())
-
-        view_total_cpu_usage += cpu_usage
-        view_total_memory_usage += memory_usage
-        view_total_memory_limit += memory_limit
-
-        all_stats[container] = {
-            "container": stats.get("Name", ""),
-            "cpu_usage": f"{cpu_usage:.2f}%",
-            "normalized_cpu_usage": f"{normalized_cpu:.2f}%",
-            "memory_usage": f"{memory_usage}MiB / {memory_limit}MiB",
-            "network_io": stats.get("NetIO", ""),
-            "block_io": stats.get("BlockIO", ""),
-            "pids": stats.get("PIDs", "")
-        }
+        all_stats[container] = process_container_stats(container, 'view')
 
     # Normalize the total CPU usage for view summary
     normalized_total_cpu_usage = normalize_cpu_usage(view_total_cpu_usage)
@@ -213,12 +215,12 @@ async def get_all_docker_stats():
         "total_memory_usage": f"{view_total_memory_usage}MiB / {view_total_memory_limit}MiB",
         "total_memory_percentage": f"{(view_total_memory_usage / view_total_memory_limit * 100):.2f}%" if view_total_memory_limit > 0 else "0%"
     }
-    
+
     # Add system load, load percentage, and memory usage to the output
     all_stats["system_load"] = get_system_load()
     all_stats["system_load_percentage"] = calculate_load_percentage()
     all_stats["system_memory_usage"] = get_memory_usage_percentage()
-    
+
     return all_stats
 
 
@@ -271,13 +273,13 @@ def get_memory_usage_percentage():
             for line in f:
                 key, value = line.split(':')
                 mem_info[key.strip()] = int(value.split()[0])  # Convert to KB
-        
+
         total_memory = mem_info['MemTotal']
         available_memory = mem_info['MemAvailable']
         used_memory = total_memory - available_memory
-        
+
         usage_percentage = (used_memory / total_memory) * 100
-        
+
         return {
             "total_memory_kb": total_memory,
             "used_memory_kb": used_memory,
@@ -292,6 +294,45 @@ def get_memory_usage_percentage():
 @app.get("/v1.0/system-memory-usage")
 async def get_system_memory_usage():
     return get_memory_usage_percentage()
+
+
+@app.get("/v1.0/run-ampere-setup")
+async def run_ampere_setup():
+    try:
+        # Run the setup function and capture its return value
+        setup_results = await asyncio.to_thread(ampere_setup)
+
+        # Check if setup_results is a dictionary (JSON-serializable)
+        if isinstance(setup_results, dict):
+            return JSONResponse(content={"setup_results": setup_results})
+        else:
+            return JSONResponse(content={"error": "Unexpected result format from setup function"}, status_code=500)
+
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+def normalize_cpu_usage(cpu_usage):
+    # cpu_usage is already a percentage, so we don't need to multiply by 100
+    return cpu_usage / TOTAL_CORES
+
+
+def parse_memory(memory_string):
+    # Remove any non-digit characters except for the last two (unit)
+    value = ''.join(c for c in memory_string if c.isdigit() or c == '.')
+    unit = memory_string[-2:].lower()
+
+    value = float(value)
+    if unit == 'kb':
+        return value / 1024
+    elif unit == 'mb':
+        return value
+    elif unit == 'gb':
+        return value * 1024
+    elif unit == 'tb':
+        return value * 1024 * 1024
+    else:
+        return value  # Assume MiB if no unit is recognized
 
 
 if __name__ == "__main__":

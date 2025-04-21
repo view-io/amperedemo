@@ -3,37 +3,591 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View AI Demo</title>
+    <title>View AI: CPU-Powered by Ampere</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="chatstream.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <header>
-        <h1>View AI Demo</h1>
-        <div id="performanceMeters">
-            <div class="meter">
-                <label>CPU Usage:</label>
-                <div class="meter-bar" id="cpuMeter"></div>
-            </div>
-            <div class="meter">
-                <label>Memory Usage:</label>
-                <div class="meter-bar" id="memoryMeter"></div>
+<div class="header">
+    <div class="logo-container">
+        <img src="/assets/view_logo.png" alt="View Logo" class="logo">
+        <h1>AI: CPU-Powered by <img src="/assets/ampere_logo.png" alt="Ampere Logo" style="height: 35px; vertical-align: middle;"></h1>
+
+        <div style="display: flex; align-items: center; margin-left: auto; margin-right: auto;">
+            System Load
+            &nbsp;
+            <canvas id="statsChart" width="175" height="30"></canvas>
+            <div style="display: flex; flex-direction: column;">
+                <span id="cpuValue" data-label="CPU:">CPU: 0%</span>
+                <span id="memoryValue" data-label="MEM:">MEM: 0%</span>
             </div>
         </div>
-    </header>
-
-    <div id="mainContainer">
-
     </div>
+    <div class="button-group">
+        <button class="run-test-button" id="toggleTestsButton">Run</button>
+        <div class="hamburger-menu">
+            <button class="hamburger-button">☰</button>
+            <div class="menu-content">
+                <a href="#" id="openInstructions"><i class="fas fa-book"></i> Instructions</a>
+                <a href="#" id="managePrompts"><i class="fas fa-edit"></i> Manage Prompts</a>
+                <a href="#" id="startStatsCollection"><i class="fas fa-chart-line"></i> Start Stats Collection</a>
+                <a href="#" id="configureSystem"><i class="fas fa-cog"></i> Configure View</a>
 
-    <footer>
-        <div class="footer-text">View AI</div>
-        <div class="button-container">
-            <button class="button" id="randomizeButton">Randomize Prompts</button>
-            <button class="button" id="launchButton">Launch Prompts</button>
+            </div>
         </div>
-        <div class="footer-text">Ampere Computing</div>
-    </footer>
+    </div>
+</div>
+<div class="grid-container" id="gridContainer">
+    <!-- Indicators and grid items will be dynamically generated here -->
+</div>
 
-    <script src="script.js"></script>
+<script>
+    const gridLayout = [
+        ["Sales 1", "Marketing 1", "Engineering 1", "Research 1", "Support 1"],
+        ["Sales 2", "Marketing 2", "Engineering 2", "Research 2", "Support 2"],
+        ["Sales 3", "Marketing 3", "Engineering 3", "Research 3", "Support 3"],
+        ["Sales 4", "Marketing 4", "Engineering 4", "Research 4", "Support 4"]
+    ];
+
+    const columnLabels = ["Sales AI Agent", "Marketing AI Agent", "Engineering AI Agent", "Research AI Agent", "Support AI Agent"];
+
+    const samplePrompts = {
+        sales: [
+            "Describe the product's key features",
+            "Explain the main benefits for customers",
+            "Compare our product to competitors",
+            "Outline the pricing structure",
+            "Mention any current promotions"
+        ],
+        marketing: [
+            "Describe the company culture",
+            "Explain employee benefits",
+            "Outline career growth opportunities",
+            "Discuss work-life balance initiatives",
+            "Highlight diversity and inclusion efforts"
+        ],
+        engineering: [
+            "Explain the product's technical architecture",
+            "Discuss recent technical challenges solved",
+            "Outline the development process",
+            "Describe the tech stack used",
+            "Highlight upcoming feature developments"
+        ],
+        research: [
+            "Highlight a customer success story",
+            "Describe community engagement initiatives",
+            "Discuss user feedback implementation",
+            "Explain the product's impact on users",
+            "Outline community support channels"
+        ],
+        support: [
+            "Describe the onboarding process",
+            "Highlight customer support options",
+            "Explain troubleshooting procedures",
+            "Discuss average response times",
+            "Outline self-help resources available"
+        ]
+    };
+
+    function createIndicators() {
+        let indicatorsHTML = '';
+        for (let i = 0; i < 5; i++) {
+            indicatorsHTML += `
+                <div class="indicator-container">
+                    <div class="column-label">${columnLabels[i]}</div>
+                    <div class="indicator-pair">
+                        <div class="indicator">
+                            <div class="dial" id="cpuDial-${i}">
+                                <div class="dial-value" id="cpuValue-${i}">0%</div>
+                            </div>
+                            <div class="dial-label">CPU</div>
+                        </div>
+                        <div class="indicator">
+                            <div class="dial" id="memoryDial-${i}">
+                                <div class="dial-value" id="memoryValue-${i}">0%</div>
+                            </div>
+                            <div class="dial-label">MEM</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        return indicatorsHTML;
+    }
+
+    function createGridItem(row, col, prompt) {
+        return `
+            <div class="grid-item" data-row="${row}" data-col="${col}">
+                <div class="prompt-container">
+                    <div class="prompt" title="${prompt}">${prompt}</div>
+                </div>
+                <div class="output" id="output-${row}-${col}"></div>
+                <div class="spinner" id="spinner-${row}-${col}"></div>
+                <div class="stats">
+                    <span class="stat-item" data-label="First Token">First: <span id="firstToken-${row}-${col}">---</span>s</span>
+                    <span class="stat-item" data-label="Total Time">Total: <span id="totalTime-${row}-${col}">---</span>s</span>
+                    <span class="stat-item" data-label="Tokens per Second">TPS: <span id="tokensPerSecond-${row}-${col}">---</span></span>
+                </div>
+            </div>
+        `;
+    }
+
+    function generateGrid() {
+        const gridContainer = document.getElementById('gridContainer');
+        gridContainer.innerHTML = createIndicators();
+        gridLayout.forEach((row, rowIndex) => {
+            row.forEach((prompt, colIndex) => {
+                gridContainer.innerHTML += createGridItem(rowIndex, colIndex, prompt);
+            });
+        });
+    }
+
+    generateGrid();
+
+    let config = null;
+
+    async function fetchConfig() {
+        try {
+            const response = await fetch('/config.json');
+            config = await response.json();
+            console.log('Config loaded:', config);
+        } catch (error) {
+            console.error('Error loading config:', error);
+        }
+    }
+
+    async function runTest(row, col, prompt) {
+        if (!config) {
+            console.error('Config not loaded');
+            return;
+        }
+
+        const category = columnLabels[col].toLowerCase().split(' ')[0]; // Extract the first word
+        console.log('Category:', category); // Debugging
+
+        if (!config[category] || !config[category].assistant_config) {
+            console.error(`Invalid config for category: ${category}`);
+            return;
+        }
+
+        const assistantConfig = config[category].assistant_config;
+        const api_url = `http://sm2:8000/v1.0/tenants/00000000-0000-0000-0000-000000000000/assistant/chat/${assistantConfig}`;
+
+        const outputDiv = document.getElementById(`output-${row}-${col}`);
+        const promptDiv = document.querySelector(`.grid-item[data-row="${row}"][data-col="${col}"] .prompt`);
+        const spinnerDiv = document.getElementById(`spinner-${row}-${col}`);
+
+        outputDiv.textContent = '';
+        promptDiv.textContent = prompt; // Update the prompt text in the UI
+
+        // Show spinner
+        spinnerDiv.style.display = 'block';
+
+        const requestBody = {
+            "messages": [{"role": "user", "content": prompt}]
+        };
+
+        function onStatsReceived(statsData) {
+            if (statsData.stats && statsData.stats.InferenceStats) {
+                const stats = statsData.stats.InferenceStats;
+                document.getElementById(`firstToken-${row}-${col}`).textContent = stats.TimeToFirstToken.toFixed(3);
+                document.getElementById(`totalTime-${row}-${col}`).textContent = stats.TotalTime.toFixed(3);
+                document.getElementById(`tokensPerSecond-${row}-${col}`).textContent = stats.TokensPerSecond.toFixed(2);
+            }
+        }
+
+        try {
+            await processAPIResponse(api_url, `output-${row}-${col}`, onStatsReceived, category, requestBody, false, spinnerDiv);
+        } catch (error) {
+            outputDiv.textContent += '\nError: ' + error.message;
+            spinnerDiv.style.display = 'none';
+        }
+    }
+
+    let isRunning = false;
+
+    document.getElementById('toggleTestsButton').addEventListener('click', function () {
+        if (isRunning) {
+            stopAllTests();
+            this.textContent = 'Run';
+        } else {
+            runAllTests();
+            this.textContent = 'Stop';
+        }
+    });
+
+    async function runAllTests() {
+        if (!config) {
+            await fetchConfig();
+        }
+
+        const categories = ['sales', 'marketing', 'engineering', 'research', 'support'];
+        const totalColumns = categories.length;
+        const totalRows = 4;
+        const initialDelayBetweenCalls = 2000; // 2000ms delay between initial calls
+
+        isRunning = true;
+
+        async function runTestLoop(row, col) {
+            const category = categories[col];
+
+            while (isRunning) {
+                const randomPrompt = samplePrompts[category][Math.floor(Math.random() * samplePrompts[category].length)];
+                const outputDiv = document.getElementById(`output-${row}-${col}`);
+                const promptDiv = document.querySelector(`.grid-item[data-row="${row}"][data-col="${col}"] .prompt`);
+
+                // Animate the prompt change
+                promptDiv.style.opacity = '0';
+                await new Promise(resolve => setTimeout(resolve, 200));
+                promptDiv.textContent = randomPrompt;
+                promptDiv.title = randomPrompt; // Update the title attribute
+                promptDiv.style.opacity = '1';
+
+                // Animate the output clearing
+                outputDiv.style.opacity = '0';
+                await new Promise(resolve => setTimeout(resolve, 200));
+                outputDiv.textContent = '';
+                outputDiv.style.opacity = '1';
+
+                await runTest(row, col, randomPrompt);
+
+                // Small delay before starting the next test
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Start all test loops with initial delays
+        for (let col = 0; col < totalColumns; col++) {
+            for (let row = 0; row < totalRows; row++) {
+                // Add delay for the first run of each column
+                await new Promise(resolve => setTimeout(resolve, col * initialDelayBetweenCalls));
+                runTestLoop(row, col);
+            }
+        }
+    }
+
+    function stopAllTests() {
+        isRunning = false;
+        console.log('Stopping all tests after the current round completes...');
+    }
+
+    function updateCPUUsage(col, value) {
+        const cpuElement = document.getElementById(`cpuValue-${col}`);
+        const cpuDial = document.getElementById(`cpuDial-${col}`);
+        cpuElement.textContent = `${value}%`;
+        cpuDial.style.borderColor = getCPUColor(value);
+    }
+
+    function updateMemoryUsage(col, value) {
+        const memElement = document.getElementById(`memoryValue-${col}`);
+        const memDial = document.getElementById(`memoryDial-${col}`);
+        if (memElement) {
+            if (value === 'N/A' || isNaN(value)) {
+                memElement.textContent = '0%';
+                memDial.style.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--memory-free-color').trim();
+            } else {
+                memElement.textContent = `${value}%`;
+                memDial.style.borderColor = getMemoryColor(parseFloat(value));
+            }
+        } else {
+            console.error(`Memory element not found for column ${col}`);
+        }
+    }
+
+    function getCPUColor(value) {
+        return value < 50 ? getComputedStyle(document.documentElement).getPropertyValue('--cpu-idle-color').trim() :
+            value < 80 ? 'orange' :
+                getComputedStyle(document.documentElement).getPropertyValue('--cpu-busy-color').trim();
+    }
+
+    function getMemoryColor(value) {
+        return value < 50 ? getComputedStyle(document.documentElement).getPropertyValue('--memory-free-color').trim() :
+            value < 80 ? 'orange' :
+                getComputedStyle(document.documentElement).getPropertyValue('--memory-used-color').trim();
+    }
+
+    async function updateGauges() {
+        const data = await fetchDockerStats();
+        if (!data) {
+            console.error('No data received from fetchDockerStats');
+            return;
+        }
+
+        // Update the chart and CPU/Memory values
+        if (data.system_load_percentage && data.system_memory_usage) {
+            try {
+                const loadPercentage = parseFloat(data.system_load_percentage['1min']);
+                const memoryPercentage = parseFloat(data.system_memory_usage.usage_percentage);
+
+                if (!isNaN(loadPercentage) && !isNaN(memoryPercentage)) {
+                    const currentTime = new Date().toLocaleTimeString();
+
+                    statsChart.data.labels.push(currentTime);
+                    statsChart.data.datasets[0].data.push(loadPercentage);
+                    statsChart.data.datasets[1].data.push(memoryPercentage);
+
+                    // Keep only the last 10 data points
+                    if (statsChart.data.labels.length > 10) {
+                        statsChart.data.labels.shift();
+                        statsChart.data.datasets[0].data.shift();
+                        statsChart.data.datasets[1].data.shift();
+                    }
+
+                    statsChart.update('none'); // Use 'none' mode for faster updates
+
+                    // Update CPU and Memory value displays
+                    // Update CPU and Memory value displays
+                    document.getElementById('cpuValue').textContent = ` ${loadPercentage.toFixed(2)}%`;
+                    document.getElementById('memoryValue').textContent = ` ${memoryPercentage.toFixed(2)}%`;
+                }
+            } catch (error) {
+                console.error('Error updating chart:', error);
+            }
+        }
+
+        const containers = ['ollama-sales', 'ollama-marketing', 'ollama-engineering', 'ollama-research', 'ollama-hr'];
+
+        containers.forEach((container, index) => {
+            if (data[container]) {
+                try {
+                    let cpuUsage = 0;
+                    if (data[container].normalized_cpu_usage) {
+                        cpuUsage = parseFloat(data[container].normalized_cpu_usage);
+                    } else if (data[container].cpu_usage) {
+                        cpuUsage = parseFloat(data[container].cpu_usage);
+                    }
+                    updateCPUUsage(index, cpuUsage.toFixed(2));
+
+                    let memoryUsage = data[container].memory_percentage || 'N/A';
+                    if (memoryUsage !== 'N/A') {
+                        memoryUsage = parseFloat(memoryUsage.replace('%', '')).toFixed(2);
+                    }
+                    updateMemoryUsage(index, memoryUsage);
+                } catch (error) {
+                    console.error(`Error updating gauges for ${container}:`, error);
+                }
+            } else {
+                console.warn(`No data for container: ${container}`);
+            }
+        });
+    }
+
+    // Call updateGauges every 5 seconds
+    const gaugeUpdateInterval = setInterval(updateGauges, 5000);
+
+    // You might want to clear this interval when the page is unloaded
+    window.addEventListener('unload', () => clearInterval(gaugeUpdateInterval));
+
+    // Call fetchConfig when the page loads
+    fetchConfig();
+
+    async function fetchDockerStats() {
+        try {
+            const response = await fetch('http://sm2:80/v1.0/all-docker-stats');
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error fetching Docker stats:', error);
+            return null;
+        }
+    }
+
+    // Hamburger menu functionality
+    document.querySelector('.hamburger-button').addEventListener('click', function () {
+        document.querySelector('.menu-content').classList.toggle('show');
+    });
+
+    // Close the menu when clicking outside
+    window.addEventListener('click', function (event) {
+        if (!event.target.matches('.hamburger-button')) {
+            var dropdowns = document.getElementsByClassName("menu-content");
+            for (var i = 0; i < dropdowns.length; i++) {
+                var openDropdown = dropdowns[i];
+                if (openDropdown.classList.contains('show')) {
+                    openDropdown.classList.remove('show');
+                }
+            }
+        }
+    });
+
+    // Manage Prompts functionality
+    document.getElementById('managePrompts').addEventListener('click', function () {
+        alert('Manage Prompts functionality to be implemented');
+    });
+
+    // Add this function to create and show a popup
+    function showPopup(message) {
+        const popup = document.createElement('div');
+        popup.style.position = 'fixed';
+        popup.style.left = '50%';
+        popup.style.top = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        popup.style.backgroundColor = 'white';
+        popup.style.padding = '20px';
+        popup.style.border = '1px solid #ccc';
+        popup.style.borderRadius = '5px';
+        popup.style.zIndex = '1000';
+        popup.style.maxWidth = '80%';
+        popup.style.maxHeight = '80%';
+        popup.style.overflow = 'auto';
+
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close';
+        closeButton.style.marginTop = '10px';
+        closeButton.onclick = () => document.body.removeChild(popup);
+
+        const content = document.createElement('pre');
+        content.textContent = JSON.stringify(JSON.parse(message), null, 2);
+
+        popup.appendChild(content);
+        popup.appendChild(closeButton);
+        document.body.appendChild(popup);
+    }
+
+    // Add this function to create and show a popup with a spinner
+    function showPopupWithSpinner(message) {
+        const popup = document.createElement('div');
+        popup.id = 'statsPopup';
+        popup.style.position = 'fixed';
+        popup.style.left = '50%';
+        popup.style.top = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        popup.style.backgroundColor = 'white';
+        popup.style.padding = '20px';
+        popup.style.border = '1px solid #ccc';
+        popup.style.borderRadius = '5px';
+        popup.style.zIndex = '1000';
+        popup.style.maxWidth = '80%';
+        popup.style.maxHeight = '80%';
+        popup.style.overflow = 'auto';
+        popup.style.display = 'flex';
+        popup.style.flexDirection = 'column';
+        popup.style.alignItems = 'center';
+
+        const spinner = document.createElement('div');
+        spinner.style.border = '4px solid #f3f3f3';
+        spinner.style.borderTop = '4px solid #3498db';
+        spinner.style.borderRadius = '50%';
+        spinner.style.width = '40px';
+        spinner.style.height = '40px';
+        spinner.style.animation = 'spin 1s linear infinite';
+        spinner.style.marginBottom = '10px';
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        const content = document.createElement('div');
+        content.textContent = message;
+
+        popup.appendChild(spinner);
+        popup.appendChild(content);
+        document.body.appendChild(popup);
+    }
+
+    // Add this function to update the popup content
+    function updatePopupContent(message) {
+        const popup = document.getElementById('statsPopup');
+        if (popup) {
+            popup.innerHTML = '';
+            const content = document.createElement('pre');
+            content.textContent = JSON.stringify(JSON.parse(message), null, 2);
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Close';
+            closeButton.style.marginTop = '10px';
+            closeButton.onclick = () => document.body.removeChild(popup);
+
+            popup.appendChild(content);
+            popup.appendChild(closeButton);
+        }
+    }
+
+    // Modify the Start Stats Collection functionality
+    let isStatsCollectionRunning = false;
+    const startStatsButton = document.getElementById('startStatsCollection');
+
+    startStatsButton.addEventListener('click', async function () {
+        const url = isStatsCollectionRunning ? 'http://sm2/v1.0/stop-all-stats' : 'http://sm2/v1.0/start-all-stats';
+        const actionText = isStatsCollectionRunning ? 'Stopping' : 'Starting';
+
+        showPopupWithSpinner(`${actionText} stats collection...`);
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            updatePopupContent(JSON.stringify(data));
+
+            isStatsCollectionRunning = !isStatsCollectionRunning;
+            startStatsButton.textContent = isStatsCollectionRunning ? 'Stop Stats Collection' : 'Start Stats Collection';
+        } catch (error) {
+            console.error('Error toggling stats collection:', error);
+            updatePopupContent(JSON.stringify({error: 'Failed to toggle stats collection'}));
+        }
+    });
+
+    // Configure System functionality
+    document.getElementById('configureSystem').addEventListener('click', function () {
+        alert('Configure System functionality to be implemented');
+    });
+
+    // Open Instructions functionality
+    document.getElementById('openInstructions').addEventListener('click', function () {
+        window.open('/instructions.html', '_blank');
+    });
+
+    // Initialize the chart
+    const ctx = document.getElementById('statsChart').getContext('2d');
+    const statsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'System Load',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 1,
+                pointRadius: 0
+            }, {
+                label: 'Memory Usage',
+                data: [],
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 1,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: false,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    display: false
+                },
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    display: false
+                }
+            },
+            animation: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    enabled: false
+                }
+            }
+        }
+    });
+</script>
 </body>
 </html>

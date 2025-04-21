@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y docker-ce-cli
 RUN apt-get update && apt-get install -y nginx
 
 # Install Python dependencies
-RUN pip install fastapi==0.110.0 uvicorn==0.21.1 pydantic==2.6.4
+RUN pip install fastapi==0.110.0 uvicorn==0.21.1 pydantic==2.6.4 requests
 
 COPY ./App /app
 

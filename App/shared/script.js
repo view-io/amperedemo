@@ -1,5 +1,6 @@
 let isRandomizing = false;
 let config;
+let isRunning = false;
 
 async function fetchConfig() {
     try {
@@ -50,7 +51,7 @@ const samplePrompts = {
         "Highlight diversity and inclusion efforts"
     ],
     engineering: [
-        "Explain the product's technical architecture",
+        "Explain the product's technical architecture.",
         "Discuss recent technical challenges solved",
         "Outline the development process",
         "Describe the tech stack used",
@@ -226,9 +227,75 @@ document.getElementById('randomizeButton').addEventListener('click', function ()
     }
 });
 
-document.getElementById('launchButton').addEventListener('click', function () {
-    openPopup();
+document.getElementById('launchButton').insertAdjacentHTML('afterend', `
+    <button id="toggleTestsButton" class="button">Start Tests</button>
+`);
+
+document.getElementById('toggleTestsButton').addEventListener('click', function() {
+    if (isRunning) {
+        stopAllTests();
+        this.textContent = 'Start Tests';
+    } else {
+        runAllTests();
+        this.textContent = 'Stop Tests';
+    }
+    isRunning = !isRunning;
 });
+
+async function runAllTests() {
+    if (!config) {
+        await fetchConfig();
+    }
+
+    const categories = ['sales', 'marketing', 'engineering', 'research', 'support'];
+    const totalColumns = categories.length;
+    const totalRows = 4;
+    const initialDelayBetweenCalls = 2000; // 500ms delay between initial calls
+
+    isRunning = true;
+
+    async function runTestLoop(row, col) {
+        const category = categories[col];
+
+        while (isRunning) {
+            const randomPrompt = samplePrompts[category][Math.floor(Math.random() * samplePrompts[category].length)];
+            const outputDiv = document.getElementById(`output-${row}-${col}`);
+            const promptDiv = document.querySelector(`.grid-item[data-row="${row}"][data-col="${col}"] .prompt`);
+
+            // Animate the prompt change
+            promptDiv.style.opacity = '0';
+            await new Promise(resolve => setTimeout(resolve, 200));
+            promptDiv.textContent = randomPrompt;
+            promptDiv.title = randomPrompt; // Update the title attribute
+            promptDiv.style.opacity = '1';
+
+            // Animate the output clearing
+            outputDiv.style.opacity = '0';
+            await new Promise(resolve => setTimeout(resolve, 200));
+            outputDiv.textContent = '';
+            outputDiv.style.opacity = '1';
+
+            await runTest(row, col, randomPrompt);
+
+            // Small delay before starting the next test
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
+    // Start all test loops with initial delays
+    for (let col = 0; col < totalColumns; col++) {
+        for (let row = 0; row < totalRows; row++) {
+            // Add delay for the first run of each column
+            await new Promise(resolve => setTimeout(resolve, col * initialDelayBetweenCalls));
+            runTestLoop(row, col);
+        }
+    }
+}
+
+function stopAllTests() {
+    isRunning = false;
+    console.log('Stopping all tests after the current round completes...');
+}
 
 function openPopup() {
     document.getElementById('promptPopup').style.display = 'block';

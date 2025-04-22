@@ -373,7 +373,7 @@
             }
         }
 
-        const containers = ['ollama-sales', 'ollama-marketing', 'ollama-engineering', 'ollama-research', 'ollama-hr'];
+        const containers = ['ollama-sales', 'ollama-marketing', 'ollama-engineering', 'ollama-research', 'ollama-humanresources'];
 
         containers.forEach((container, index) => {
             if (data[container]) {
@@ -561,7 +561,7 @@
 
     // Configure System functionality
     document.getElementById('configureSystem').addEventListener('click', async function () {
-        showPopupWithSpinner('Running Ampere setup...');
+        showPopupWithSpinner('Running View AI setup...');
 
         try {
             const response = await fetch('/v1.0/run-ampere-setup');
@@ -573,8 +573,11 @@
             updatePopupContent(formattedData);
         } catch (error) {
             console.error('Error running Ampere setup:', error);
-            updatePopupContent(JSON.stringify({error: 'Failed to run Ampere setup'}, null, 2));
+            updatePopupContent(JSON.stringify({error: 'Failed to run View AI setup'}, null, 2));
         }
+        // reload the config.json
+        fetchConfig();
+
     });
 
     // Open Instructions functionality

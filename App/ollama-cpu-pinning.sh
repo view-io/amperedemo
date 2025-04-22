@@ -12,7 +12,7 @@ CONTAINERS=(
   "ollama-marketing"
   "ollama-research"
   "ollama-sales"
-  "ollama-hr"
+  "ollama-humanresources"
 )
 NUM_INSTANCES=${#CONTAINERS[@]}
 

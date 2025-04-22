@@ -17,10 +17,10 @@ from typing import List
 app = FastAPI()
 
 # Add this constant near the top of your file
-OLLAMA_CONTAINERS = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-hr', 'ollama-marketing']
+OLLAMA_CONTAINERS = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources', 'ollama-marketing']
 
 TOTAL_CORES = 192  # Total number of cores in the system
-OLLAMA_INSTANCES = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-hr', 'ollama-marketing']
+OLLAMA_INSTANCES = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources', 'ollama-marketing']
 CPUS_PER_INSTANCE = 38  # This can be adjusted as needed
 
 def get_docker_client():
@@ -59,7 +59,7 @@ app.add_middleware(
 )
 
 # Global variables to store the latest Docker stats and thread status
-ollama_containers = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-hr', 'ollama-marketing']
+ollama_containers = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources', 'ollama-marketing']
 view_containers = [
     'view-assistant-1', 'view-config-1', 'view-crawler-1', 'view-dashboard-1',
     'view-director-1', 'view-embeddings-1', 'view-embeddings-2', 'view-lcproxy-1',

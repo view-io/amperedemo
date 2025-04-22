@@ -367,6 +367,42 @@ async def set_ollama_cpu_affinity(
         "start_cpu": start_cpu
     })
 
+@app.get("/v1.0/container-info")
+async def get_api_container_info():
+    return get_container_info()
+
+def get_container_info():
+    # Get the hostname (container ID)
+    hostname = os.environ.get('HOSTNAME', 'Unknown')
+
+    # Initialize Docker client
+    client = docker.from_env()
+
+    try:
+        # Get container information
+        container = client.containers.get(hostname)
+        
+        # Get container name
+        container_name = container.name
+
+        # Get image name and tag
+        image_name = container.image.tags[0] if container.image.tags else 'Unknown'
+        
+        return {
+            "container_id": hostname,
+            "container_name": container_name,
+            "image": image_name
+        }
+    except docker.errors.NotFound:
+        return {
+            "container_id": hostname,
+            "container_name": "Unknown",
+            "image": "Unknown"
+        }
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
 
 def normalize_cpu_usage(cpu_usage):
     # cpu_usage is already a percentage, so we don't need to multiply by 100

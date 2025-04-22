@@ -14,12 +14,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application files, configuration, and startup script
-COPY ./App /app
-COPY ./App/startup.sh /
+# Copy requirements
+COPY ./App/requirements.txt ./App/nginx.conf /app/
 
 # Install Python dependencies, Set execute permissions for startup script and move nginx config
-RUN pip install --no-cache-dir -r requirements.txt && chmod +x /app/startup.sh && mv /app/nginx.conf /etc/nginx/nginx.conf
+RUN pip install --no-cache-dir -r requirements.txt && mv /app/nginx.conf /etc/nginx/nginx.conf
+
+# Copy application files, configuration, and startup script
+COPY ./App/startup.sh /
+COPY ./App /app
 
 
 # Use the startup script as the entry point

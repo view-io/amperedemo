@@ -226,22 +226,48 @@ h1 {
 }
 
 .spinner {
-    display: none;
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(0, 0, 0, .1);
-    border-radius: 50%;
-    border-top-color: var(--primary-color);
-    animation: spin 1s ease-in-out infinite;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    z-index: 3;
 }
 
-@keyframes spin {
-    to {
-        transform: translate(-50%, -50%) rotate(360deg);
+.spinner > div {
+    width: 5px;
+    height: 5px;
+    background-color: black;
+    border-radius: 0;
+    display: inline-block;
+    animation: bounce 1.4s infinite ease-in-out both;
+    margin: 0 1px;
+}
+
+.spinner .bounce1 {
+    animation-delay: -0.32s;
+}
+
+.spinner .bounce2 {
+    animation-delay: -0.24s;
+}
+
+.spinner .bounce3 {
+    animation-delay: -0.16s;
+}
+
+.spinner .bounce4 {
+    animation-delay: -0.08s;
+}
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
     }
 }
 
@@ -297,6 +323,39 @@ h1 {
 
 .show {
     display: block;
+}
+
+.config-error {
+    text-align: center;
+    padding: 20px;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 5px;
+    margin: 20px;
+}
+
+.config-error p {
+    color: #721c24;
+    margin-bottom: 10px;
+}
+
+.config-error button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.config-error button:hover {
+    background-color: #0056b3;
+}
+
+.model-label {
+    font-size: 0.8em;
+    color: #666;
+    margin-bottom: 5px;
 }
 
 #cpuValue, #memoryValue {

@@ -35,6 +35,8 @@
                 <a href="#" id="managePrompts"><i class="fas fa-edit"></i> Manage Prompts</a>
                 <a href="#" id="startStatsCollection"><i class="fas fa-chart-line"></i> Start Stats Collection</a>
                 <a href="#" id="configureSystem"><i class="fas fa-cog"></i> Configure View</a>
+                <a href="#" id="setCPUAffinity">Set CPU Affinity</a>
+                <span id="versionInfo">Version: </span>
 
             </div>
         </div>
@@ -46,13 +48,13 @@
 
 <script>
     const gridLayout = [
-        ["Sales 1", "Marketing 1", "Engineering 1", "Research 1", "Support 1"],
-        ["Sales 2", "Marketing 2", "Engineering 2", "Research 2", "Support 2"],
-        ["Sales 3", "Marketing 3", "Engineering 3", "Research 3", "Support 3"],
-        ["Sales 4", "Marketing 4", "Engineering 4", "Research 4", "Support 4"]
+        ["Sales 1", "Marketing 1", "Engineering 1", "Research 1", "HR 1"],
+        ["Sales 2", "Marketing 2", "Engineering 2", "Research 2", "HR 2"],
+        ["Sales 3", "Marketing 3", "Engineering 3", "Research 3", "HR 3"],
+        ["Sales 4", "Marketing 4", "Engineering 4", "Research 4", "HR 4"]
     ];
 
-    const columnLabels = ["Sales AI Agent", "Marketing AI Agent", "Engineering AI Agent", "Research AI Agent", "Support AI Agent"];
+    const columnLabels = ["Sales AI Agent", "Marketing AI Agent", "Engineering AI Agent", "Research AI Agent", "HR AI Agent"];
 
     const samplePrompts = {
         sales: [
@@ -83,7 +85,7 @@
             "Explain the product's impact on users",
             "Outline community support channels"
         ],
-        support: [
+        humanresources: [
             "Describe the onboarding process",
             "Highlight customer support options",
             "Explain troubleshooting procedures",
@@ -125,7 +127,13 @@
                     <div class="prompt" title="${prompt}">${prompt}</div>
                 </div>
                 <div class="output" id="output-${row}-${col}"></div>
-                <div class="spinner" id="spinner-${row}-${col}"></div>
+            <div class="spinner" id="spinner-${row}-${col}">
+                <div class="bounce1"></div>
+                <div class="bounce2"></div>
+                <div class="bounce3"></div>
+                <div class="bounce4"></div>
+                <div class="bounce5"></div>
+            </div>
                 <div class="stats">
                     <span class="stat-item" data-label="First Token">First: <span id="firstToken-${row}-${col}">---</span>s</span>
                     <span class="stat-item" data-label="Total Time">Total: <span id="totalTime-${row}-${col}">---</span>s</span>
@@ -165,16 +173,33 @@
             return;
         }
 
-        const category = columnLabels[col].toLowerCase().split(' ')[0]; // Extract the first word
+        // Use the categories array to get the correct category name
+        const categories = ['sales', 'marketing', 'engineering', 'research', 'humanresources']
+        const category = categories[col];
         console.log('Category:', category); // Debugging
 
-        if (!config[category] || !config[category].assistant_config) {
-            console.error(`Invalid config for category: ${category}`);
+        // Find the matching URL in the config
+        let matchingUrl = Object.keys(config).find(url => url.includes(`${category}/`));
+
+        console.log('URL:', matchingUrl); // Debugging
+
+        if (!matchingUrl) {
+            console.error(`No config found for category: ${category}`);
             return;
         }
 
-        const assistantConfig = config[category].assistant_config;
-        const api_url = `http://sm2:8000/v1.0/tenants/00000000-0000-0000-0000-000000000000/assistant/chat/${assistantConfig}`;
+        const categoryConfig = config[matchingUrl];
+
+        if (!categoryConfig.assistant_config_guid) {
+            console.error(`No assistant_config_guid found for category: ${category}`);
+            return;
+        }
+
+        const assistantConfig = categoryConfig.assistant_config_guid;
+        console.log('Preset:', assistantConfig); // Debugging
+        const api_url = `http://${window.location.hostname}:8000/v1.0/tenants/00000000-0000-0000-0000-000000000000/assistant/chat/${assistantConfig}`;
+
+        console.log('API URL:', api_url); // Log the API URL for debugging
 
         const outputDiv = document.getElementById(`output-${row}-${col}`);
         const promptDiv = document.querySelector(`.grid-item[data-row="${row}"][data-col="${col}"] .prompt`);
@@ -224,7 +249,7 @@
             await fetchConfig();
         }
 
-        const categories = ['sales', 'marketing', 'engineering', 'research', 'support'];
+        const categories = ['sales', 'marketing', 'engineering', 'research', 'humanresources']
         const totalColumns = categories.length;
         const totalRows = 4;
         const initialDelayBetweenCalls = 2000; // 2000ms delay between initial calls
@@ -386,7 +411,7 @@
 
     async function fetchDockerStats() {
         try {
-            const response = await fetch('http://sm2:80/v1.0/all-docker-stats');
+            const response = await fetch('/v1.0/all-docker-stats');
             const data = await response.json();
             return data;
         } catch (error) {
@@ -516,7 +541,7 @@
     const startStatsButton = document.getElementById('startStatsCollection');
 
     startStatsButton.addEventListener('click', async function () {
-        const url = isStatsCollectionRunning ? 'http://sm2/v1.0/stop-all-stats' : 'http://sm2/v1.0/start-all-stats';
+        const url = isStatsCollectionRunning ? '/v1.0/stop-all-stats' : '/v1.0/start-all-stats';
         const actionText = isStatsCollectionRunning ? 'Stopping' : 'Starting';
 
         showPopupWithSpinner(`${actionText} stats collection...`);
@@ -535,13 +560,44 @@
     });
 
     // Configure System functionality
-    document.getElementById('configureSystem').addEventListener('click', function () {
-        alert('Configure System functionality to be implemented');
+    document.getElementById('configureSystem').addEventListener('click', async function () {
+        showPopupWithSpinner('Running Ampere setup...');
+
+        try {
+            const response = await fetch('/v1.0/run-ampere-setup');
+            const data = await response.json();
+
+            // Format the JSON data for better readability
+            const formattedData = JSON.stringify(data, null, 2);
+
+            updatePopupContent(formattedData);
+        } catch (error) {
+            console.error('Error running Ampere setup:', error);
+            updatePopupContent(JSON.stringify({error: 'Failed to run Ampere setup'}, null, 2));
+        }
     });
 
     // Open Instructions functionality
     document.getElementById('openInstructions').addEventListener('click', function () {
         window.open('/instructions.html', '_blank');
+    });
+
+    // Set CPU Affinity functionality
+    document.getElementById('setCPUAffinity').addEventListener('click', async function () {
+        showPopupWithSpinner('Setting CPU Affinity...');
+
+        try {
+            const response = await fetch('/v1.0/set-ollama-cpu-affinity');
+            const data = await response.json();
+
+            // Format the JSON data for better readability
+            const formattedData = JSON.stringify(data, null, 2);
+
+            updatePopupContent(formattedData);
+        } catch (error) {
+            console.error('Error setting CPU Affinity:', error);
+            updatePopupContent(JSON.stringify({error: 'Failed to set CPU Affinity'}, null, 2));
+        }
     });
 
     // Initialize the chart
@@ -586,6 +642,36 @@
                     enabled: false
                 }
             }
+        }
+    });
+
+    async function fetchContainerInfo() {
+        try {
+            const response = await fetch('/v1.0/container-info');
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error fetching container info:', error);
+            return null;
+        }
+    }
+
+    // Function to update the version information
+    function updateVersionInfo(version) {
+        const versionSpan = document.querySelector('.menu-content span');
+        if (versionSpan) {
+            versionSpan.textContent = `Version: ${version}`;
+        }
+    }
+
+    // Call this function when the page loads
+    document.addEventListener('DOMContentLoaded', async () => {
+        const containerInfo = await fetchContainerInfo();
+        if (containerInfo && containerInfo.image) {
+            const version = containerInfo.image.split(':')[1] || 'Unknown';
+            updateVersionInfo(version);
+        } else {
+            updateVersionInfo('Unknown');
         }
     });
 </script>

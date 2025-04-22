@@ -277,9 +277,6 @@ def setup():
             logger.info(f"Assistant Config GUID: {assistant_config_guid}")
             url_result['assistant_config_guid'] = assistant_config_guid
 
-            # Add the model name from the assistant_configs dict
-            url_result['model'] = assistant_configs.get(name, "qwen2.5:0.5b")
-
             logger.info(f"Completed processing for {url}")
             results[url] = url_result
 
@@ -288,8 +285,8 @@ def setup():
             results[url] = {'error': str(error)}
 
     logger.info("Setup completed.")
-
-    # Save results to shared/config.json
+    # Add the model name from the assistant_configs dict to the results based on the config name.
+        # Save results to shared/config.json
     config_dir = 'shared'
     config_file = os.path.join(config_dir, 'config.json')
 

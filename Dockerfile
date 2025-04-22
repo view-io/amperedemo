@@ -24,6 +24,8 @@ RUN pip install --no-cache-dir -r requirements.txt && mv /app/nginx.conf /etc/ng
 COPY ./App/startup.sh /
 COPY ./App /app
 
+# Make the files and directories readable and executable for the nginx server
+RUN find /app/shared -type d -exec chmod 755 {} + && find /app/shared -type f -exec chmod 644 {} +
 
 # Use the startup script as the entry point
 ENTRYPOINT ["/startup.sh"]

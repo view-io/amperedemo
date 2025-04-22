@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 import subprocess
@@ -11,9 +11,36 @@ import asyncio
 from ampere_setup import setup as ampere_setup
 import io
 import sys
+import docker
+from typing import List
 
 app = FastAPI()
 
+# Add this constant near the top of your file
+OLLAMA_CONTAINERS = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-hr', 'ollama-marketing']
+
+TOTAL_CORES = 192  # Total number of cores in the system
+OLLAMA_INSTANCES = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-hr', 'ollama-marketing']
+CPUS_PER_INSTANCE = 38  # This can be adjusted as needed
+
+def get_docker_client():
+    return docker.DockerClient(base_url='unix:///var/run/docker.sock')
+
+def get_container_pid(client: docker.DockerClient, container_name: str) -> int:
+    try:
+        container = client.containers.get(container_name)
+        return container.attrs['State']['Pid']
+    except docker.errors.NotFound:
+        print(f"Container {container_name} not found")
+        return None
+
+def set_cpu_affinity(pid: int, cpu_list: List[int]):
+    cpu_list_str = ','.join(map(str, cpu_list))
+    try:
+        subprocess.run(['taskset', '-pc', cpu_list_str, str(pid)], check=True)
+        print(f"Set CPU affinity for PID {pid} to CPUs {cpu_list_str}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error setting CPU affinity for PID {pid}: {e}")
 
 @app.middleware("http")
 async def log_requests(request, call_next):
@@ -47,8 +74,6 @@ stop_flags = {container: threading.Event() for container in containers}
 
 # Use the Docker socket path
 DOCKER_SOCKET = '/var/run/docker.sock'
-
-TOTAL_CORES = 192  # Total number of cores in the system
 
 
 def clean_ansi(text):
@@ -310,6 +335,37 @@ async def run_ampere_setup():
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/v1.0/set-ollama-cpu-affinity")
+async def set_ollama_cpu_affinity(
+    cpus_per_instance: int = Query(default=CPUS_PER_INSTANCE, description="Number of CPUs per Ollama instance"),
+    start_cpu: int = Query(default=0, description="Starting CPU number")
+):
+    client = get_docker_client()
+    
+    # Calculate CPU mappings dynamically
+    cpu_mappings = {}
+    current_cpu = start_cpu
+    for instance in OLLAMA_INSTANCES:
+        end_cpu = current_cpu + cpus_per_instance
+        cpu_mappings[instance] = list(range(current_cpu, end_cpu))
+        current_cpu = end_cpu
+
+    results = {}
+    for container_name, cpu_list in cpu_mappings.items():
+        pid = get_container_pid(client, container_name)
+        if pid:
+            set_cpu_affinity(pid, cpu_list)
+            results[container_name] = f"Set CPU affinity to CPUs {','.join(map(str, cpu_list))}"
+        else:
+            results[container_name] = "Container not found"
+
+    return JSONResponse(content={
+        "results": results,
+        "cpus_per_instance": cpus_per_instance,
+        "start_cpu": start_cpu
+    })
 
 
 def normalize_cpu_usage(cpu_usage):

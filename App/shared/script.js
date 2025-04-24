@@ -100,7 +100,7 @@ async function updateColumn(category) {
 
 async function callAPI(category, prompt, presetGUID) {
     const apiUrl = `http://sm2:8000/v1.0/tenants/00000000-0000-0000-0000-000000000000/assistant/chat/${presetGUID}`;
-    console.log(`API Call to ${presetGUID} for ${category}`);
+    //console.log(`API Call to ${presetGUID} for ${category}`);
     setResponseData(category, '');
 
     try {
@@ -131,7 +131,7 @@ async function callAPI(category, prompt, presetGUID) {
             for (const line of lines) {
                 const trimmedLine = line.trim();
                 if (trimmedLine === '[END_OF_TEXT_STREAM]') {
-                    console.log('End of text stream reached');
+                    //console.log('End of text stream reached');
                     responseComplete = true;
                     continue;
                 }
@@ -145,7 +145,7 @@ async function callAPI(category, prompt, presetGUID) {
                 if (line.startsWith('data: ')) {
                     const content = line.slice(6).trim();
                     if (content === '[END_OF_TEXT_STREAM]') {
-                        console.log('End of text stream reached');
+                        //console.log('End of text stream reached');
                         responseComplete = true;
                         continue;
                     }
@@ -164,7 +164,7 @@ async function callAPI(category, prompt, presetGUID) {
         // Process any remaining data in the buffer
         if (buffer.trim() !== '') {
             if (buffer.trim() === '[END_OF_TEXT_STREAM]') {
-                console.log('End of text stream reached');
+                //console.log('End of text stream reached');
             } else {
                 statsBuffer += buffer.trim();
             }
@@ -174,7 +174,7 @@ async function callAPI(category, prompt, presetGUID) {
         if (statsBuffer) {
             try {
                 const statsData = JSON.parse(statsBuffer);
-                console.log('Stats data received:', statsData);
+                //console.log('Stats data received:', statsData);
                 processStatsData(category, statsData);
             } catch (error) {
                 console.error('Error parsing stats data:', error);
@@ -227,19 +227,27 @@ document.getElementById('randomizeButton').addEventListener('click', function ()
     }
 });
 
-document.getElementById('launchButton').insertAdjacentHTML('afterend', `
-    <button id="toggleTestsButton" class="button">Start Tests</button>
-`);
+// Update the existing event listener for the 'Manage Prompts' button
+document.getElementById('managePrompts').addEventListener('click', function () {
+    openPopup();
+});
 
-document.getElementById('toggleTestsButton').addEventListener('click', function() {
-    if (isRunning) {
-        stopAllTests();
-        this.textContent = 'Start Tests';
-    } else {
-        runAllTests();
-        this.textContent = 'Stop Tests';
+// The toggleTestsButton is now added directly in the HTML, so this JavaScript code is no longer needed.
+
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleTestsButton = document.getElementById('toggleTestsButton');
+    if (toggleTestsButton) {
+        toggleTestsButton.addEventListener('click', function () {
+            if (isRunning) {
+                stopAllTests();
+                this.textContent = 'Start Tests';
+            } else {
+                runAllTests();
+                this.textContent = 'Stop Tests';
+            }
+            isRunning = !isRunning;
+        });
     }
-    isRunning = !isRunning;
 });
 
 async function runAllTests() {
@@ -314,10 +322,10 @@ function renderPromptLists() {
         const categoryDiv = document.createElement('div');
         categoryDiv.className = 'prompt-list';
         categoryDiv.innerHTML = `
-                <h3>${category.charAt(0).toUpperCase() + category.slice(1)}</h3>
-                <div id="${category}Prompts"></div>
-                <button onclick="addPrompt('${category}')">Add Prompt</button>
-            `;
+            <h3>${category.charAt(0).toUpperCase() + category.slice(1)}</h3>
+            <div id="${category}Prompts"></div>
+            <button onclick="addPrompt('${category}')">Add Prompt</button>
+        `;
         promptListsContainer.appendChild(categoryDiv);
 
         const promptsContainer = document.getElementById(`${category}Prompts`);
@@ -325,16 +333,16 @@ function renderPromptLists() {
             const promptDiv = document.createElement('div');
             promptDiv.className = 'prompt-item';
             promptDiv.innerHTML = `
-                    <input type="text" value="${prompt}" onchange="updatePrompt('${category}', ${index}, this.value)">
-                    <button onclick="deletePrompt('${category}', ${index})">Delete</button>
-                `;
+                <input type="text" value="${prompt}" onchange="updatePrompt('${category}', ${index}, this.value)">
+                <button onclick="deletePrompt('${category}', ${index})">Delete</button>
+            `;
             promptsContainer.appendChild(promptDiv);
         });
     }
 }
 
-function addPrompt(category) {
-    samplePrompts[category].push('New prompt');
+function deletePrompt(category, index) {
+    samplePrompts[category].splice(index, 1);
     renderPromptLists();
 }
 
@@ -342,8 +350,52 @@ function updatePrompt(category, index, newValue) {
     samplePrompts[category][index] = newValue;
 }
 
+function addPrompt(category) {
+    samplePrompts[category].push('New prompt');
+    renderPromptLists();
+}
+
+function savePrompts() {
+    // Here you can add logic to save the updated prompts if needed
+    closePopup();
+}
+
+const promptListsContainer = document.getElementById('promptLists');
+promptListsContainer.innerHTML = '';
+
+for (const [category, prompts] of Object.entries(samplePrompts)) {
+    const categoryDiv = document.createElement('div');
+    categoryDiv.className = 'prompt-list';
+    categoryDiv.innerHTML = `
+                <h3>${category.charAt(0).toUpperCase() + category.slice(1)}</h3>
+                <div id="${category}Prompts"></div>
+                <button onclick="addPrompt('${category}')">Add Prompt</button>
+            `;
+    promptListsContainer.appendChild(categoryDiv);
+
+    const promptsContainer = document.getElementById(`${category}Prompts`);
+    prompts.forEach((prompt, index) => {
+        const promptDiv = document.createElement('div');
+        promptDiv.className = 'prompt-item';
+        promptDiv.innerHTML = `
+                    <input type="text" value="${prompt}" onchange="updatePrompt('${category}', ${index}, this.value)">
+                    <button onclick="deletePrompt('${category}', ${index})">Delete</button>
+                `;
+        promptsContainer.appendChild(promptDiv);
+    });
+}
+
 function deletePrompt(category, index) {
     samplePrompts[category].splice(index, 1);
+    renderPromptLists();
+}
+
+function updatePrompt(category, index, newValue) {
+    samplePrompts[category][index] = newValue;
+}
+
+function addPrompt(category) {
+    samplePrompts[category].push('New prompt');
     renderPromptLists();
 }
 

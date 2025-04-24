@@ -8,7 +8,7 @@ import time
 import os
 import re
 import asyncio
-from ampere_setup import setup as ampere_setup
+from ampere_setup import setup as ampere_setup, assistant_configs
 import io
 import sys
 import docker
@@ -23,8 +23,10 @@ TOTAL_CORES = 192  # Total number of cores in the system
 OLLAMA_INSTANCES = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources', 'ollama-marketing']
 CPUS_PER_INSTANCE = 38  # This can be adjusted as needed
 
+
 def get_docker_client():
     return docker.DockerClient(base_url='unix:///var/run/docker.sock')
+
 
 def get_container_pid(client: docker.DockerClient, container_name: str) -> int:
     try:
@@ -34,6 +36,7 @@ def get_container_pid(client: docker.DockerClient, container_name: str) -> int:
         print(f"Container {container_name} not found")
         return None
 
+
 def set_cpu_affinity(pid: int, cpu_list: List[int]):
     cpu_list_str = ','.join(map(str, cpu_list))
     try:
@@ -41,6 +44,7 @@ def set_cpu_affinity(pid: int, cpu_list: List[int]):
         print(f"Set CPU affinity for PID {pid} to CPUs {cpu_list_str}")
     except subprocess.CalledProcessError as e:
         print(f"Error setting CPU affinity for PID {pid}: {e}")
+
 
 @app.middleware("http")
 async def log_requests(request, call_next):
@@ -339,11 +343,11 @@ async def run_ampere_setup():
 
 @app.get("/v1.0/set-ollama-cpu-affinity")
 async def set_ollama_cpu_affinity(
-    cpus_per_instance: int = Query(default=CPUS_PER_INSTANCE, description="Number of CPUs per Ollama instance"),
-    start_cpu: int = Query(default=0, description="Starting CPU number")
+        cpus_per_instance: int = Query(default=CPUS_PER_INSTANCE, description="Number of CPUs per Ollama instance"),
+        start_cpu: int = Query(default=0, description="Starting CPU number")
 ):
     client = get_docker_client()
-    
+
     # Calculate CPU mappings dynamically
     cpu_mappings = {}
     current_cpu = start_cpu
@@ -367,9 +371,11 @@ async def set_ollama_cpu_affinity(
         "start_cpu": start_cpu
     })
 
+
 @app.get("/v1.0/container-info")
 async def get_api_container_info():
     return get_container_info()
+
 
 def get_container_info():
     # Get the hostname (container ID)
@@ -381,13 +387,13 @@ def get_container_info():
     try:
         # Get container information
         container = client.containers.get(hostname)
-        
+
         # Get container name
         container_name = container.name
 
         # Get image name and tag
         image_name = container.image.tags[0] if container.image.tags else 'Unknown'
-        
+
         return {
             "container_id": hostname,
             "container_name": container_name,
@@ -403,6 +409,7 @@ def get_container_info():
         return {
             "error": str(e)
         }
+
 
 def normalize_cpu_usage(cpu_usage):
     # cpu_usage is already a percentage, so we don't need to multiply by 100
@@ -425,6 +432,36 @@ def parse_memory(memory_string):
         return value * 1024 * 1024
     else:
         return value  # Assume MiB if no unit is recognized
+
+
+@app.get("/v1.0/assistant-configs")
+async def get_assistant_configs():
+    try:
+        # Read the shared/config.json file
+        with open('shared/config.json', 'r') as config_file:
+            config_data = json.load(config_file)
+
+        merged_configs = {}
+        for url, value in config_data.items():
+            category = url.rstrip('/').split('/')[-1]  # Extract category from URL
+            if category in assistant_configs:
+                merged_configs[url] = {
+                    **value,
+                    "model": assistant_configs[category]
+                }
+            else:
+                merged_configs[url] = {
+                    **value,
+                    "model": "qwen2.5:0.5b"  # Default model if category not found
+                }
+
+        return JSONResponse(content=merged_configs)
+    except FileNotFoundError:
+        return JSONResponse(content={"error": "Config file not found"}, status_code=404)
+    except json.JSONDecodeError:
+        return JSONResponse(content={"error": "Invalid JSON in config file"}, status_code=500)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 if __name__ == "__main__":

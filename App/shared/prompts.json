@@ -1,0 +1,37 @@
+{
+  "sales": [
+    "Describe the product's key features",
+    "Explain the main benefits for customers",
+    "Compare our product to competitors",
+    "Outline the pricing structure",
+    "Mention any current promotions"
+  ],
+  "marketing": [
+    "Describe the company culture",
+    "Explain employee benefits",
+    "Outline career growth opportunities",
+    "Discuss work-life balance initiatives",
+    "Highlight diversity and inclusion efforts"
+  ],
+  "engineering": [
+    "Explain the product's technical architecture",
+    "Discuss recent technical challenges solved",
+    "Outline the development process",
+    "Describe the tech stack used",
+    "Highlight upcoming feature developments"
+  ],
+  "research": [
+    "Highlight a customer success story",
+    "Describe community engagement initiatives",
+    "Discuss user feedback implementation",
+    "Explain the product's impact on users",
+    "Outline community support channels"
+  ],
+  "humanresources": [
+    "Describe the onboarding process",
+    "Highlight customer support options",
+    "Explain troubleshooting procedures",
+    "Discuss average response times",
+    "Outline self-help resources available"
+  ]
+}

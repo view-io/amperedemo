@@ -56,7 +56,7 @@
 
     const columnLabels = ["Sales AI Agent", "Marketing AI Agent", "Engineering AI Agent", "Research AI Agent", "Human Resources AI Agent"];
 
-    const samplePrompts = {
+    let samplePrompts = {
         sales: [
             "Describe the product's key features",
             "Explain the main benefits for customers",
@@ -94,30 +94,104 @@
         ]
     };
 
+    function getCPUColor(value) {
+        value = parseFloat(value);
+        if (isNaN(value)) return getComputedStyle(document.documentElement).getPropertyValue('--cpu-idle-color').trim();
+        return value < 50 ? getComputedStyle(document.documentElement).getPropertyValue('--cpu-idle-color').trim() :
+            value < 80 ? 'orange' :
+                getComputedStyle(document.documentElement).getPropertyValue('--cpu-busy-color').trim();
+    }
+
+    function getMemoryColor(value) {
+        value = parseFloat(value);
+        if (isNaN(value)) return getComputedStyle(document.documentElement).getPropertyValue('--memory-free-color').trim();
+        return value < 50 ? getComputedStyle(document.documentElement).getPropertyValue('--memory-free-color').trim() :
+            value < 80 ? 'orange' :
+                getComputedStyle(document.documentElement).getPropertyValue('--memory-used-color').trim();
+    }
+
     function createIndicators() {
         let indicatorsHTML = '';
         for (let i = 0; i < 5; i++) {
             indicatorsHTML += `
                 <div class="indicator-container">
                     <div class="column-label">${columnLabels[i]}</div>
-                    <div class="indicator-pair">
-                        <div class="indicator">
-                            <div class="dial" id="cpuDial-${i}">
-                                <div class="dial-value" id="cpuValue-${i}">0%</div>
-                            </div>
-                            <div class="dial-label">CPU</div>
-                        </div>
-                        <div class="indicator">
-                            <div class="dial" id="memoryDial-${i}">
-                                <div class="dial-value" id="memoryValue-${i}">0%</div>
-                            </div>
-                            <div class="dial-label">MEM</div>
-                        </div>
+                    <div class="model-info">
+                        <span class="model-name" id="modelName-${i}">Loading...</span>
+                        <span class="model-size" id="modelSize-${i}">Loading...</span>
+                    </div>
+                    <div class="indicator-values">
+                        <span class="value-label">CPU: <span id="cpuValue-${i}">0%</span></span>
+                        <span class="value-label">MEM: <span id="memoryValue-${i}">0%</span></span>
                     </div>
                 </div>
+
             `;
         }
         return indicatorsHTML;
+    }
+
+    // Function to update model names
+    function updateModelNames() {
+        if (!config) return;
+
+        const categories = ['sales', 'marketing', 'engineering', 'research', 'humanresources'];
+        categories.forEach((category, index) => {
+            const matchingUrl = Object.keys(config).find(url => url.toLowerCase().includes(`${category}/`));
+            if (matchingUrl) {
+                const modelInfo = config[matchingUrl].model || 'Unknown';
+                const [modelName, modelSize] = modelInfo.split(':');
+
+                const modelNameElement = document.getElementById(`modelName-${index}`);
+                const modelSizeElement = document.getElementById(`modelSize-${index}`);
+
+                if (modelNameElement) {
+                    modelNameElement.textContent = `Model:  ${modelName.toLowerCase()}`;
+                }
+
+                if (modelSizeElement) {
+                    modelSizeElement.textContent = `Size: ${modelSize ? modelSize.toLowerCase() : "N/A"}`;
+                }
+            }
+        });
+    }
+
+    // Function to show a popup with a spinner
+    function showPopupWithSpinner(message) {
+        const popup = document.createElement('div');
+        popup.id = 'statusPopup';
+        popup.innerHTML = `
+        <div class="popup-content">
+            <p>${message}</p>
+            <div class="spinner">
+                <div class="bounce1"></div>
+                <div class="bounce2"></div>
+                <div class="bounce3"></div>
+                <div class="bounce4"></div>
+                <div class="bounce5"></div>
+            </div>
+        </div>
+    `;
+        document.body.appendChild(popup);
+    }
+
+    // Function to update the content of the popup
+    function updatePopupContent(content) {
+        const popup = document.getElementById('statusPopup');
+        if (popup) {
+            popup.querySelector('.popup-content').innerHTML = `<pre>${content}</pre>`;
+            setTimeout(() => {
+                popup.remove();
+            }, 3000);
+        }
+    }
+
+    // Function to remove the popup
+    function removePopup() {
+        const popup = document.getElementById('statusPopup');
+        if (popup) {
+            popup.remove();
+        }
     }
 
     function createGridItem(row, col, prompt) {
@@ -154,16 +228,67 @@
     }
 
     generateGrid();
-
     let config = null;
 
     async function fetchConfig() {
         try {
-            const response = await fetch('/config.json');
+            const response = await fetch('/v1.0/assistant-configs');
             config = await response.json();
             console.log('Config loaded:', config);
+            updateModelNames();
         } catch (error) {
             console.error('Error loading config:', error);
+        }
+    }
+
+    async function loadPrompts() {
+        try {
+            const response = await fetch('/prompts.json');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            samplePrompts = await response.json();
+            console.log('Prompts loaded successfully');
+        } catch (error) {
+            console.error('Error loading prompts:', error);
+            // If there's an error, we'll use the default prompts
+            samplePrompts = {
+                sales: [
+                    "Describe the product's key features",
+                    "Explain the main benefits for customers",
+                    "Compare our product to competitors",
+                    "Outline the pricing structure",
+                    "Mention any current promotions"
+                ],
+                marketing: [
+                    "Describe the company culture",
+                    "Explain employee benefits",
+                    "Outline career growth opportunities",
+                    "Discuss work-life balance initiatives",
+                    "Highlight diversity and inclusion efforts"
+                ],
+                engineering: [
+                    "Explain the product's technical architecture",
+                    "Discuss recent technical challenges solved",
+                    "Outline the development process",
+                    "Describe the tech stack used",
+                    "Highlight upcoming feature developments"
+                ],
+                research: [
+                    "Highlight a customer success story",
+                    "Describe community engagement initiatives",
+                    "Discuss user feedback implementation",
+                    "Explain the product's impact on users",
+                    "Outline community support channels"
+                ],
+                humanresources: [
+                    "Describe the onboarding process",
+                    "Highlight customer support options",
+                    "Explain troubleshooting procedures",
+                    "Discuss average response times",
+                    "Outline self-help resources available"
+                ]
+            };
         }
     }
 
@@ -176,12 +301,11 @@
         // Use the categories array to get the correct category name
         const categories = ['sales', 'marketing', 'engineering', 'research', 'humanresources']
         const category = categories[col];
-        console.log('Category:', category); // Debugging
+//        console.log('Category:', category); // Debugging
 
         // Find the matching URL in the config
         let matchingUrl = Object.keys(config).find(url => url.includes(`${category}/`));
 
-        console.log('URL:', matchingUrl); // Debugging
 
         if (!matchingUrl) {
             console.error(`No config found for category: ${category}`);
@@ -196,10 +320,8 @@
         }
 
         const assistantConfig = categoryConfig.assistant_config_guid;
-        console.log('Preset:', assistantConfig); // Debugging
         const api_url = `http://${window.location.hostname}:8000/v1.0/tenants/00000000-0000-0000-0000-000000000000/assistant/chat/${assistantConfig}`;
 
-        console.log('API URL:', api_url); // Log the API URL for debugging
 
         const outputDiv = document.getElementById(`output-${row}-${col}`);
         const promptDiv = document.querySelector(`.grid-item[data-row="${row}"][data-col="${col}"] .prompt`);
@@ -300,48 +422,45 @@
     }
 
     function updateCPUUsage(col, value) {
-        const cpuElement = document.getElementById(`cpuValue-${col}`);
-        const cpuDial = document.getElementById(`cpuDial-${col}`);
-        cpuElement.textContent = `${value}%`;
-        cpuDial.style.borderColor = getCPUColor(value);
-    }
-
-    function updateMemoryUsage(col, value) {
-        const memElement = document.getElementById(`memoryValue-${col}`);
-        const memDial = document.getElementById(`memoryDial-${col}`);
-        if (memElement) {
-            if (value === 'N/A' || isNaN(value)) {
-                memElement.textContent = '0%';
-                memDial.style.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--memory-free-color').trim();
-            } else {
-                memElement.textContent = `${value}%`;
-                memDial.style.borderColor = getMemoryColor(parseFloat(value));
+        const container = document.querySelector(`.indicator-container:nth-child(${col + 1})`);
+        if (container) {
+            const cpuElement = container.querySelector('.dial-value');
+            const cpuDial = container.querySelector('.dial');
+            if (cpuElement && cpuDial) {
+                cpuElement.textContent = `${value}%`;
+                cpuDial.style.borderColor = getCPUColor(value);
             }
-        } else {
-            console.error(`Memory element not found for column ${col}`);
         }
     }
 
-    function getCPUColor(value) {
-        return value < 50 ? getComputedStyle(document.documentElement).getPropertyValue('--cpu-idle-color').trim() :
-            value < 80 ? 'orange' :
-                getComputedStyle(document.documentElement).getPropertyValue('--cpu-busy-color').trim();
-    }
-
-    function getMemoryColor(value) {
-        return value < 50 ? getComputedStyle(document.documentElement).getPropertyValue('--memory-free-color').trim() :
-            value < 80 ? 'orange' :
-                getComputedStyle(document.documentElement).getPropertyValue('--memory-used-color').trim();
+    function updateMemoryUsage(col, value) {
+        const container = document.querySelector(`.indicator-container:nth-child(${col + 1})`);
+        if (container) {
+            const memElement = container.querySelectorAll('.dial-value')[1]; // Second dial-value in the container
+            const memDial = container.querySelectorAll('.dial')[1]; // Second dial in the container
+            if (memElement && memDial) {
+                if (value === 'N/A' || isNaN(value)) {
+                    memElement.textContent = '0%';
+                    memDial.style.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--memory-free-color').trim();
+                } else {
+                    memElement.textContent = `${value}%`;
+                    memDial.style.borderColor = getMemoryColor(parseFloat(value));
+                }
+            }
+        } else {
+            console.error(`Container not found for column ${col}`);
+        }
     }
 
     async function updateGauges() {
         const data = await fetchDockerStats();
+        console.log("Fetched Docker Stats:", data);  // Log the entire data object
         if (!data) {
             console.error('No data received from fetchDockerStats');
             return;
         }
 
-        // Update the chart and CPU/Memory values
+        // Update the chart and system CPU/Memory values
         if (data.system_load_percentage && data.system_memory_usage) {
             try {
                 const loadPercentage = parseFloat(data.system_load_percentage['1min']);
@@ -363,8 +482,7 @@
 
                     statsChart.update('none'); // Use 'none' mode for faster updates
 
-                    // Update CPU and Memory value displays
-                    // Update CPU and Memory value displays
+                    // Update system CPU and Memory value displays
                     document.getElementById('cpuValue').textContent = ` ${loadPercentage.toFixed(2)}%`;
                     document.getElementById('memoryValue').textContent = ` ${memoryPercentage.toFixed(2)}%`;
                 }
@@ -375,39 +493,59 @@
 
         const containers = ['ollama-sales', 'ollama-marketing', 'ollama-engineering', 'ollama-research', 'ollama-humanresources'];
 
-        containers.forEach((container, index) => {
-            if (data[container]) {
+        containers.forEach((containerName, index) => {
+            if (data[containerName]) {
                 try {
-                    let cpuUsage = 0;
-                    if (data[container].normalized_cpu_usage) {
-                        cpuUsage = parseFloat(data[container].normalized_cpu_usage);
-                    } else if (data[container].cpu_usage) {
-                        cpuUsage = parseFloat(data[container].cpu_usage);
-                    }
-                    updateCPUUsage(index, cpuUsage.toFixed(2));
+                    console.log(`Updating ${containerName}:`, data[containerName]);  // Log individual container data
 
-                    let memoryUsage = data[container].memory_percentage || 'N/A';
-                    if (memoryUsage !== 'N/A') {
-                        memoryUsage = parseFloat(memoryUsage.replace('%', '')).toFixed(2);
+                    let cpuUsage = 0;
+                    if (data[containerName].normalized_cpu_usage) {
+                        cpuUsage = parseFloat(data[containerName].normalized_cpu_usage.replace('%', ''));
+                    } else if (data[containerName].cpu_usage) {
+                        cpuUsage = parseFloat(data[containerName].cpu_usage.replace('%', ''));
                     }
-                    updateMemoryUsage(index, memoryUsage);
+
+                    let memoryUsage = 0;
+                    if (data[containerName].memory_percentage) {
+                        memoryUsage = parseFloat(data[containerName].memory_percentage.replace('%', ''));
+                    }
+
+                    console.log(`${containerName} - CPU: ${cpuUsage}%, Memory: ${memoryUsage}%`);  // Log parsed values
+
+                    updateCPUUsage(index, Math.round(cpuUsage));
+                    updateMemoryUsage(index, Math.round(memoryUsage));
+
+                    // Update the indicator values
+                    const containerElement = document.querySelector(`.indicator-container:nth-child(${index + 1})`);
+                    if (containerElement) {
+                        const cpuValueElement = containerElement.querySelector('.value-label:nth-child(1) span');
+                        const memValueElement = containerElement.querySelector('.value-label:nth-child(2) span');
+
+                        if (cpuValueElement) cpuValueElement.textContent = `${Math.round(cpuUsage)}%`;
+                        if (memValueElement) memValueElement.textContent = `${Math.round(memoryUsage)}%`;
+                    }
+
                 } catch (error) {
-                    console.error(`Error updating gauges for ${container}:`, error);
+                    console.error(`Error updating gauges for ${containerName}:`, error);
                 }
             } else {
-                console.warn(`No data for container: ${container}`);
+                console.warn(`No data for container: ${containerName}`);
             }
         });
     }
 
     // Call updateGauges every 5 seconds
-    const gaugeUpdateInterval = setInterval(updateGauges, 5000);
+    let gaugeUpdateInterval = setInterval(updateGauges, 5000);
 
+    // Clear existing interval and start a new one
+    clearInterval(gaugeUpdateInterval);
+    gaugeUpdateInterval = setInterval(updateGauges, 5000);
     // You might want to clear this interval when the page is unloaded
     window.addEventListener('unload', () => clearInterval(gaugeUpdateInterval));
 
-    // Call fetchConfig when the page loads
+    // Call fetchConfig and loadPrompts when the page loads
     fetchConfig();
+    loadPrompts();
 
     async function fetchDockerStats() {
         try {
@@ -438,103 +576,6 @@
         }
     });
 
-    // Manage Prompts functionality
-    document.getElementById('managePrompts').addEventListener('click', function () {
-        alert('Manage Prompts functionality to be implemented');
-    });
-
-    // Add this function to create and show a popup
-    function showPopup(message) {
-        const popup = document.createElement('div');
-        popup.style.position = 'fixed';
-        popup.style.left = '50%';
-        popup.style.top = '50%';
-        popup.style.transform = 'translate(-50%, -50%)';
-        popup.style.backgroundColor = 'white';
-        popup.style.padding = '20px';
-        popup.style.border = '1px solid #ccc';
-        popup.style.borderRadius = '5px';
-        popup.style.zIndex = '1000';
-        popup.style.maxWidth = '80%';
-        popup.style.maxHeight = '80%';
-        popup.style.overflow = 'auto';
-
-        const closeButton = document.createElement('button');
-        closeButton.textContent = 'Close';
-        closeButton.style.marginTop = '10px';
-        closeButton.onclick = () => document.body.removeChild(popup);
-
-        const content = document.createElement('pre');
-        content.textContent = JSON.stringify(JSON.parse(message), null, 2);
-
-        popup.appendChild(content);
-        popup.appendChild(closeButton);
-        document.body.appendChild(popup);
-    }
-
-    // Add this function to create and show a popup with a spinner
-    function showPopupWithSpinner(message) {
-        const popup = document.createElement('div');
-        popup.id = 'statsPopup';
-        popup.style.position = 'fixed';
-        popup.style.left = '50%';
-        popup.style.top = '50%';
-        popup.style.transform = 'translate(-50%, -50%)';
-        popup.style.backgroundColor = 'white';
-        popup.style.padding = '20px';
-        popup.style.border = '1px solid #ccc';
-        popup.style.borderRadius = '5px';
-        popup.style.zIndex = '1000';
-        popup.style.maxWidth = '80%';
-        popup.style.maxHeight = '80%';
-        popup.style.overflow = 'auto';
-        popup.style.display = 'flex';
-        popup.style.flexDirection = 'column';
-        popup.style.alignItems = 'center';
-
-        const spinner = document.createElement('div');
-        spinner.style.border = '4px solid #f3f3f3';
-        spinner.style.borderTop = '4px solid #3498db';
-        spinner.style.borderRadius = '50%';
-        spinner.style.width = '40px';
-        spinner.style.height = '40px';
-        spinner.style.animation = 'spin 1s linear infinite';
-        spinner.style.marginBottom = '10px';
-
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        `;
-        document.head.appendChild(style);
-
-        const content = document.createElement('div');
-        content.textContent = message;
-
-        popup.appendChild(spinner);
-        popup.appendChild(content);
-        document.body.appendChild(popup);
-    }
-
-    // Add this function to update the popup content
-    function updatePopupContent(message) {
-        const popup = document.getElementById('statsPopup');
-        if (popup) {
-            popup.innerHTML = '';
-            const content = document.createElement('pre');
-            content.textContent = JSON.stringify(JSON.parse(message), null, 2);
-
-            const closeButton = document.createElement('button');
-            closeButton.textContent = 'Close';
-            closeButton.style.marginTop = '10px';
-            closeButton.onclick = () => document.body.removeChild(popup);
-
-            popup.appendChild(content);
-            popup.appendChild(closeButton);
-        }
-    }
 
     // Modify the Start Stats Collection functionality
     let isStatsCollectionRunning = false;
@@ -667,8 +708,8 @@
         }
     }
 
-    // Call this function when the page loads
     document.addEventListener('DOMContentLoaded', async () => {
+        await loadPrompts();
         const containerInfo = await fetchContainerInfo();
         if (containerInfo && containerInfo.image) {
             const version = containerInfo.image.split(':')[1] || 'Unknown';
@@ -677,6 +718,82 @@
             updateVersionInfo('Unknown');
         }
     });
+
+    // Function to create and show the manage prompts modal
+    function showManagePromptsModal() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Manage Prompts</h2>
+                <div id="promptsContainer"></div>
+                <button id="savePrompts">Save Changes</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const closeBtn = modal.querySelector('.close');
+        closeBtn.onclick = () => modal.remove();
+
+        const promptsContainer = modal.querySelector('#promptsContainer');
+        renderPrompts(promptsContainer);
+
+        const saveButton = modal.querySelector('#savePrompts');
+        saveButton.onclick = savePromptChanges;
+    }
+
+    // Function to render prompts
+    function renderPrompts(container) {
+        container.innerHTML = '';
+        Object.entries(samplePrompts).forEach(([category, prompts]) => {
+            const categoryDiv = document.createElement('div');
+            categoryDiv.innerHTML = `
+                <h3>${category.charAt(0).toUpperCase() + category.slice(1)}</h3>
+                <div id="${category}Prompts"></div>
+                <button onclick="addPrompt('${category}')">Add New Prompt</button>
+            `;
+            container.appendChild(categoryDiv);
+
+            const promptsDiv = categoryDiv.querySelector(`#${category}Prompts`);
+            prompts.forEach((prompt, index) => {
+                const promptDiv = document.createElement('div');
+                promptDiv.className = 'prompt-item';
+                promptDiv.innerHTML = `
+                    <textarea rows="2" cols="50">${prompt}</textarea>
+                    <button onclick="deletePrompt('${category}', ${index})" class="delete-button">
+                        <i class="fas fa-trash-alt"></i>
+                `;
+                promptsDiv.appendChild(promptDiv);
+            });
+        });
+    }
+
+    // Function to add a new prompt
+    function addPrompt(category) {
+        samplePrompts[category].push('New prompt');
+        const container = document.getElementById('promptsContainer');
+        renderPrompts(container);
+    }
+
+    // Function to delete a prompt
+    function deletePrompt(category, index) {
+        samplePrompts[category].splice(index, 1);
+        const container = document.getElementById('promptsContainer');
+        renderPrompts(container);
+    }
+
+    // Function to save prompt changes
+    function savePromptChanges() {
+        Object.keys(samplePrompts).forEach(category => {
+            const promptDivs = document.querySelectorAll(`#${category}Prompts .prompt-item`);
+            samplePrompts[category] = Array.from(promptDivs).map(div => div.querySelector('textarea').value.trim()).filter(prompt => prompt !== '');
+        });
+        alert('Prompts saved successfully!');
+    }
+
+    // Add event listener for the Manage Prompts button
+    document.getElementById('managePrompts').addEventListener('click', showManagePromptsModal);
 </script>
 </body>
 </html>

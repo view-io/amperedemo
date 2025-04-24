@@ -87,40 +87,50 @@ h1 {
 .indicator-container {
     display: flex;
     flex-direction: column;
-    justify-content: space-around;
     align-items: center;
     padding: 10px;
-    background-color: var(--grid-item-bg);
-    border: 1px solid #bdc3c7;
-    border-radius: 3px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.column-label {
-    font-weight: bold;
-    font-size: 0.9em;
-    color: var(--label-color);
-    margin-bottom: 5px;
-    text-align: center;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 10px;
 }
 
 .indicator-pair {
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
     width: 100%;
+    margin-bottom: 5px;
 }
 
 .indicator {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    width: 48%;
+}
+
+.value-label {
+    display: flex;
+    align-items: center;
+    font-weight: lighter;
+    margin-right: 5px;
+}
+
+.value-label span {
+    margin-left: 5px;
+}
+
+.value {
+    font-family: monospace;
+    min-width: 40px;
+    text-align: right;
 }
 
 .dial {
-    width: 50px;
-    height: 50px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     border: 5px solid var(--cpu-idle-color);
     position: relative;
-    margin: 5px auto;
+    margin-right: 5px;
     transition: border-color 0.3s ease;
 }
 
@@ -138,8 +148,62 @@ h1 {
 }
 
 .dial-label {
-    font-size: 0.7em;
-    margin-top: 2px;
+    font-size: 12px;
+    width: 30px;
+}
+
+.indicator-labels {
+    display: flex;
+    flex-direction: column;
+}
+
+.column-label {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: var(--label-color);
+    margin-bottom: 5px;
+    text-align: center;
+}
+
+.column-sublabel {
+    font-weight: normal;
+    font-size: 0.9em;
+    color: #050505;
+    margin-bottom: 2px;
+    text-align: center;
+}
+
+.model-info {
+    display: flex;
+    justify-content: space-between;
+    width: 90%;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.model-name, .model-size {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.model-name {
+    text-align: left;
+    padding-right: 5px;
+}
+
+.model-size {
+    text-align: right;
+    padding-left: 5px;
+}
+
+.indicator-values {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    font-size: 1em;
 }
 
 .grid-item {
@@ -383,4 +447,163 @@ h1 {
 
 #memoryValue {
     color: var(--memory-free-color);
+}
+
+.prompt-list {
+    margin-bottom: 20px;
+}
+
+.prompt-item {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.prompt-item input {
+    flex-grow: 1;
+    margin-right: 10px;
+    padding: 5px;
+}
+
+.prompt-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.delete-button {
+    background-color: transparent;
+    border: none;
+    color: #f44336;
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 5px;
+}
+
+.delete-button:hover {
+    color: #d32f2f;
+}
+
+.prompt-item textarea {
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
+.prompt-item button {
+    background-color: white;
+    color: black;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.prompt-item button:hover {
+    background-color: #d32f2f;
+}
+
+#promptsContainer > div {
+    margin-bottom: 20px;
+}
+
+#promptsContainer h3 {
+    margin-bottom: 10px;
+}
+
+#promptsContainer button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+#promptsContainer button:hover {
+    background-color: #45a049;
+
+}
+
+#statusPopup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.popup-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.popup-content pre {
+    text-align: left;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+
+.modal {
+    display: block;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 600px;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#promptsContainer {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#promptsContainer textarea {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+#savePrompts {
+    display: block;
+    margin: 20px auto 0;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+#savePrompts:hover {
+    background-color: #45a049;
 }

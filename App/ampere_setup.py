@@ -31,7 +31,7 @@ assistant_configs = {
     "marketing": "qwen2.5:0.5b",
     "engineering": "qwen2.5:0.5b",
     "humanresources": "qwen2.5:0.5b",
-    "research": "qwen2.5:0.5b"
+    "research": "qwen2.5:7b"
 }
 
 def make_api_call(endpoint, method, body):

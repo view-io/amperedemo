@@ -1,3 +1,4 @@
+import httpx
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -8,7 +9,7 @@ import time
 import os
 import re
 import asyncio
-from ampere_setup import setup as ampere_setup, assistant_configs
+from ampere_setup import setup as ampere_setup, assistant_configs, base_url, tenant_id, logger
 import io
 import sys
 import docker
@@ -17,10 +18,12 @@ from typing import List
 app = FastAPI()
 
 # Add this constant near the top of your file
-OLLAMA_CONTAINERS = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources', 'ollama-marketing']
+OLLAMA_CONTAINERS = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources',
+                     'ollama-marketing']
 
 TOTAL_CORES = 192  # Total number of cores in the system
-OLLAMA_INSTANCES = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources', 'ollama-marketing']
+OLLAMA_INSTANCES = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources',
+                    'ollama-marketing']
 CPUS_PER_INSTANCE = 38  # This can be adjusted as needed
 
 
@@ -63,7 +66,8 @@ app.add_middleware(
 )
 
 # Global variables to store the latest Docker stats and thread status
-ollama_containers = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources', 'ollama-marketing']
+ollama_containers = ['ollama-sales', 'ollama-engineering', 'ollama-research', 'ollama-humanresources',
+                     'ollama-marketing']
 view_containers = [
     'view-assistant-1', 'view-config-1', 'view-crawler-1', 'view-dashboard-1',
     'view-director-1', 'view-embeddings-1', 'view-embeddings-2', 'view-lcproxy-1',
@@ -86,7 +90,8 @@ def clean_ansi(text):
 
 
 def run_docker_stats(container):
-    cmd = ['docker', '-H', f'unix://{DOCKER_SOCKET}', 'stats', '--format', '{{json .}}', container, '--no-trunc', '--no-stream']
+    cmd = ['docker', '-H', f'unix://{DOCKER_SOCKET}', 'stats', '--format', '{{json .}}', container, '--no-trunc',
+           '--no-stream']
     try:
         while not stop_flags[container].is_set():
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
@@ -381,34 +386,48 @@ def get_container_info():
     # Get the hostname (container ID)
     hostname = os.environ.get('HOSTNAME', 'Unknown')
 
-    # Initialize Docker client
-    client = docker.from_env()
-
     try:
-        # Get container information
-        container = client.containers.get(hostname)
+        # Initialize Docker client with explicit socket path
+        client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
 
-        # Get container name
-        container_name = container.name
+        try:
+            # Get container information
+            container = client.containers.get(hostname)
 
-        # Get image name and tag
-        image_name = container.image.tags[0] if container.image.tags else 'Unknown'
+            # Get container name
+            container_name = container.name
 
+            # Get image name and tag
+            image_name = container.image.tags[0] if container.image.tags else 'Unknown'
+
+            return {
+                "container_id": hostname,
+                "container_name": container_name,
+                "image": image_name
+            }
+        except docker.errors.NotFound:
+            return {
+                "container_id": hostname,
+                "container_name": "Unknown",
+                "image": "Unknown"
+            }
+    except docker.errors.DockerException as e:
         return {
-            "container_id": hostname,
-            "container_name": container_name,
-            "image": image_name
-        }
-    except docker.errors.NotFound:
-        return {
+            "error": f"Docker client initialization error: {str(e)}",
             "container_id": hostname,
             "container_name": "Unknown",
             "image": "Unknown"
         }
     except Exception as e:
         return {
-            "error": str(e)
+            "error": f"Unexpected error: {str(e)}",
+            "container_id": hostname,
+            "container_name": "Unknown",
+            "image": "Unknown"
         }
+    finally:
+        if 'client' in locals():
+            client.close()
 
 
 def normalize_cpu_usage(cpu_usage):
@@ -462,6 +481,43 @@ async def get_assistant_configs():
         return JSONResponse(content={"error": "Invalid JSON in config file"}, status_code=500)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/v1.0/pull-models")
+async def pull_models_endpoint():
+    async def model_stream():
+        unique_models = set(assistant_configs.values())
+        async with httpx.AsyncClient() as client:
+            for model in unique_models:
+                body = {
+                    "ModelName": model,
+                    "Stream": True,
+                    "OllamaHostname": "ollama-sales",
+                    "OllamaPort": 11434,
+                    "Source": "ollama"
+                }
+                try:
+                    response = await client.post(
+                        f"{base_url}/Assistant/v1.0/tenants/{tenant_id}/assistant/models/pull",
+                        json=body,
+                        headers={
+                            'Content-Type': 'application/json',
+                            'x-token': "default"
+                        },
+                    )
+                    response.raise_for_status()
+                    logger.info(f"Pulling model: {model}")
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+                    logger.info(f"Successfully pulled model: {model}")
+                except httpx.RequestError as e:
+                    logger.error(f"Error pulling model {model}: {str(e)}")
+                    if hasattr(e, 'response'):
+                        logger.error(f"Response status code: {e.response.status_code}")
+                        logger.error(f"Response content: {e.response.text}")
+                    yield f"Error pulling model {model}: {str(e)}\n".encode()
+
+    return StreamingResponse(model_stream(), media_type="text/plain")
 
 
 if __name__ == "__main__":

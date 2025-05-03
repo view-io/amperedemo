@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 base_url = 'http://host.docker.internal:9000'
 tenant_id = '00000000-0000-0000-0000-000000000000'
 urls = [
-    'http://ampere-demo/sales/',
-    'http://ampere-demo/marketing/',
-    'http://ampere-demo/engineering/',
-    'http://ampere-demo/humanresources/',
-    'http://ampere-demo/research/'
+    'http://ampere-demo/assets/sales/',
+    'http://ampere-demo/assets/marketing/',
+    'http://ampere-demo/assets/engineering/',
+    'http://ampere-demo/assets/humanresources/',
+    'http://ampere-demo/assets/research/'
 ]
 
 # API token
@@ -27,12 +27,18 @@ token = 'mXCNtMWDsW0/pr+IwRFUjZScG7NggOjghJ2ITFe4+I4Am424DVh6aG8wz/WcVibLMiXcBhp
 
 # Add this dictionary near the top of the file, after the imports and before the functions
 assistant_configs = {
+    #    "sales": "qwen2.5:0.5b",
     "sales": "qwen2.5:0.5b",
+    #    "marketing": "hf.co/AmpereComputing/llama-3.1-8b-gguf:Q4_K",
     "marketing": "qwen2.5:0.5b",
+    #    "engineering": "tinydolphin",
     "engineering": "qwen2.5:0.5b",
+    #    "humanresources": "deepseek-r1:1.5b",
     "humanresources": "qwen2.5:0.5b",
+    #    "research": "qwen2.5:7b"
     "research": "qwen2.5:0.5b"
 }
+
 
 def make_api_call(endpoint, method, body):
     logger.info(f"Making {method} request to {base_url}{endpoint}")
@@ -48,8 +54,10 @@ def make_api_call(endpoint, method, body):
     response.raise_for_status()
     return response.json()['GUID']
 
+
 def generate_uuid():
     return str(uuid.uuid4())
+
 
 def create_vector_repo(name):
     vector_guid = generate_uuid()
@@ -65,10 +73,11 @@ def create_vector_repo(name):
         "DatabaseTable": f"view-{vector_guid}",
         "DatabasePort": 5432,
         "DatabaseUser": "postgres",
-        "DatabasePassword": "password"
+        "DatabasePassword": os.environ.get('VIEW_PGVECTOR_PASS', 'password')
     }
     guid = make_api_call(f"/Config/v1.0/tenants/{tenant_id}/vectorrepositories", 'PUT', body)
     return guid, vector_guid
+
 
 def create_metadata_rule(name):
     endpoint = f"/Config/v1.0/tenants/{tenant_id}/metadatarules"
@@ -127,6 +136,7 @@ def create_metadata_rule(name):
             logger.error(f"Response content: {e.response.text}")
         exit()
 
+
 def create_embedding_rule(name, vector_repo_guid):
     body = {
         "TenantGUID": tenant_id,
@@ -151,6 +161,7 @@ def create_embedding_rule(name, vector_repo_guid):
         "MaxContentLength": 16777216
     }
     return make_api_call(f"/Config/v1.0/tenants/{tenant_id}/embeddingsrules", 'PUT', body)
+
 
 def create_repository(name, url):
     api_hostname = urlparse(base_url).hostname
@@ -179,6 +190,7 @@ def create_repository(name, url):
     }
     return make_api_call(f"/Crawler/v1.0/tenants/{tenant_id}/datarepositories", 'PUT', body)
 
+
 def create_crawl_plan(name, metadata_rule_guid, embedding_rule_guid, repository_guid):
     body = {
         "Name": name,
@@ -197,6 +209,7 @@ def create_crawl_plan(name, metadata_rule_guid, embedding_rule_guid, repository_
     }
     return make_api_call(f"/Crawler/v1.0/tenants/{tenant_id}/crawlplans", 'PUT', body)
 
+
 def create_assistant_config(name, vector_guid):
     generation_model = assistant_configs.get(name, "qwen2.5:0.5b")
     body = {
@@ -209,7 +222,7 @@ def create_assistant_config(name, vector_guid):
         "VectorDatabaseHostname": "pgvector",
         "VectorDatabasePort": 5432,
         "VectorDatabaseUser": "postgres",
-        "VectorDatabasePassword": "password",
+        "VectorDatabasePassword": os.environ.get('VIEW_PGVECTOR_PASS', 'password'),
         "GenerationProvider": "ollama",
         "GenerationModel": generation_model,
         "GenerationApiKey": "",
@@ -230,13 +243,12 @@ def create_assistant_config(name, vector_guid):
     }
     return make_api_call(f"/Assistant/v1.0/tenants/{tenant_id}/assistant/configs", 'POST', body)
 
+
 def setup():
     logger.info("Starting setup...")
     results = {}
 
     # Pull unique models
-    logger.info("Pulling unique models...")
-    pull_unique_models()
 
     for url in urls:
         url_parts = url.split('/')
@@ -285,8 +297,20 @@ def setup():
             results[url] = {'error': str(error)}
 
     logger.info("Setup completed.")
+
     # Add the model name from the assistant_configs dict to the results based on the config name.
-        # Save results to shared/config.json
+    for url, url_result in results.items():
+        name = url.split('/')[-2] or 'default'
+        if name in assistant_configs:
+            url_result['model'] = assistant_configs[name]
+
+    # Add an entry about pulling models
+    results['model_pulling'] = {
+        'status': 'started',
+        'message': 'Model pulling has been initiated in the background.'
+    }
+
+    # Save results to shared/config.json
     config_dir = 'shared'
     config_file = os.path.join(config_dir, 'config.json')
 
@@ -300,7 +324,14 @@ def setup():
     except Exception as e:
         logger.error(f"Error saving results to {config_file}: {str(e)}")
 
+    logger.info("Pulling unique models in the background...")
+
+    # Run pull_unique_models in the background
+    import threading
+    threading.Thread(target=pull_unique_models, daemon=True).start()
+
     return results
+
 
 def pull_unique_models():
     unique_models = set(assistant_configs.values())
@@ -313,21 +344,28 @@ def pull_unique_models():
             "Source": "ollama"
         }
         try:
-            response = requests.post(
-                f"{base_url}/Assistant/v1.0/tenants/{tenant_id}/assistant/models/pull",
-                json=body,
-                headers={
-                    'Content-Type': 'application/json',
-                    'x-token': token
-                }
-            )
-            response.raise_for_status()
+            with requests.post(
+                    f"{base_url}/Assistant/v1.0/tenants/{tenant_id}/assistant/models/pull",
+                    json=body,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'x-token': token
+                    },
+                    stream=True
+            ) as response:
+                response.raise_for_status()
+                logger.info(f"Pulling model: {model}")
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        # Stream the chunk to the client
+                        print(chunk.decode('utf-8'), end='', flush=True)
             logger.info(f"Successfully pulled model: {model}")
         except requests.exceptions.RequestException as e:
             logger.error(f"Error pulling model {model}: {str(e)}")
             if hasattr(e, 'response'):
                 logger.error(f"Response status code: {e.response.status_code}")
                 logger.error(f"Response content: {e.response.text}")
+
 
 if __name__ == "__main__":
     setup_results = setup()

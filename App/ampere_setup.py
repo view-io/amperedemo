@@ -27,16 +27,19 @@ token = 'mXCNtMWDsW0/pr+IwRFUjZScG7NggOjghJ2ITFe4+I4Am424DVh6aG8wz/WcVibLMiXcBhp
 
 # Add this dictionary near the top of the file, after the imports and before the functions
 assistant_configs = {
-    #    "sales": "qwen2.5:0.5b",
-    "sales": "qwen2.5:0.5b",
-    #    "marketing": "hf.co/AmpereComputing/llama-3.1-8b-gguf:Q4_K",
-    "marketing": "qwen2.5:0.5b",
-    #    "engineering": "tinydolphin",
+    "sales": "llama3:8b",
+    #"sales": "qwen2.5:0.5b",
+    #"marketing": "hf.co/AmpereComputing/llama-3.1-8b-gguf:Q4_K",
+    #"marketing": "qwen2.5:0.5b",
+    "marketing": "llama3.2:3b",
+    #"engineering": "tinydolphin",
     "engineering": "qwen2.5:0.5b",
-    #    "humanresources": "deepseek-r1:1.5b",
-    "humanresources": "qwen2.5:0.5b",
-    #    "research": "qwen2.5:7b"
-    "research": "qwen2.5:0.5b"
+    #"humanresources": "deepseek-r1:1.5b",
+    #"humanresources": "qwen2.5:0.5b",
+    "humanresources": "hf.co/Solshine/Llama-3.1-SuperNova-Lite-Q8_0-GGUF:Q8_0",
+    #"research": "qwen2.5:7b"
+    #"research": "qwen2.5:0.5b",
+    "research": "hf.co/bartowski/Virtuoso-Lite-GGUF:Q4_K_M"
 }
 
 

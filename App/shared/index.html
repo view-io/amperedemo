@@ -327,7 +327,7 @@
         const promptDiv = document.querySelector(`.grid-item[data-row="${row}"][data-col="${col}"] .prompt`);
         const spinnerDiv = document.getElementById(`spinner-${row}-${col}`);
 
-        outputDiv.textContent = '';
+        // Don't clear the output to avoid blank text boxes while waiting for responses
         promptDiv.textContent = prompt; // Update the prompt text in the UI
 
         // Show spinner
@@ -374,7 +374,11 @@
         const categories = ['sales', 'marketing', 'engineering', 'research', 'humanresources']
         const totalColumns = categories.length;
         const totalRows = 4;
-        const initialDelayBetweenCalls = 2000; // 2000ms delay between initial calls
+
+        // Track active cells in each column
+        const activeInColumn = Array(totalColumns).fill(0);
+        // Track if a cell is currently running a test
+        const cellActive = Array(totalRows).fill().map(() => Array(totalColumns).fill(false));
 
         isRunning = true;
 
@@ -382,6 +386,10 @@
             const category = categories[col];
 
             while (isRunning) {
+                // Mark this cell as active
+                cellActive[row][col] = true;
+                activeInColumn[col]++;
+
                 const randomPrompt = samplePrompts[category][Math.floor(Math.random() * samplePrompts[category].length)];
                 const outputDiv = document.getElementById(`output-${row}-${col}`);
                 const promptDiv = document.querySelector(`.grid-item[data-row="${row}"][data-col="${col}"] .prompt`);
@@ -393,25 +401,56 @@
                 promptDiv.title = randomPrompt; // Update the title attribute
                 promptDiv.style.opacity = '1';
 
-                // Animate the output clearing
-                outputDiv.style.opacity = '0';
-                await new Promise(resolve => setTimeout(resolve, 200));
-                outputDiv.textContent = '';
-                outputDiv.style.opacity = '1';
-
+                // Don't clear the output, just run the new test
                 await runTest(row, col, randomPrompt);
 
-                // Small delay before starting the next test
+                // Mark this cell as inactive
+                cellActive[row][col] = false;
+                activeInColumn[col]--;
+
+                // Small delay before checking if we should run again
                 await new Promise(resolve => setTimeout(resolve, 500));
+
+                // If we're still running and this column doesn't have enough active cells, continue
+                // Otherwise, wait until this column needs more activity
+                if (!isRunning) break;
+
+                while (isRunning && activeInColumn[col] >= 2) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             }
         }
 
-        // Start all test loops with initial delays
+        // Start initial test in each cell with staggered delays
         for (let col = 0; col < totalColumns; col++) {
-            for (let row = 0; row < totalRows; row++) {
-                // Add delay for the first run of each column
-                await new Promise(resolve => setTimeout(resolve, col * initialDelayBetweenCalls));
-                runTestLoop(row, col);
+            // Start with 1-2 cells per column
+            const initialCellsToStart = Math.min(2, totalRows);
+
+            for (let i = 0; i < initialCellsToStart; i++) {
+                const row = i;
+                // Stagger the start times
+                const delay = col * 1000 + row * 500;
+                setTimeout(() => {
+                    runTestLoop(row, col);
+                }, delay);
+            }
+
+            // Schedule the remaining cells to start when needed
+            for (let row = initialCellsToStart; row < totalRows; row++) {
+                setTimeout(() => {
+                    // Check periodically if this column needs more active cells
+                    const checkInterval = setInterval(() => {
+                        if (!isRunning) {
+                            clearInterval(checkInterval);
+                            return;
+                        }
+
+                        if (activeInColumn[col] < 2 && !cellActive[row][col]) {
+                            clearInterval(checkInterval);
+                            runTestLoop(row, col);
+                        }
+                    }, 2000);
+                }, col * 1000 + 5000); // Start checking after a delay
             }
         }
     }

@@ -190,8 +190,10 @@ h1 {
 }
 
 .model-name {
-    text-align: left;
     padding-right: 5px;
+    direction: rtl;
+    text-align: left;
+    max-width: 120px; /* Limit width to ensure consistent column sizes */
 }
 
 .model-size {
